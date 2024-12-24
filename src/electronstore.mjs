@@ -1,0 +1,10 @@
+import Store from "electron-store"
+const store = new Store();
+export function GetLeagueDirSave()
+{
+    return store.get("LeagueDirSave")
+}
+export function SetLeagueDirSave(data)
+{
+    store.set("LeagueDirSave",data)
+}
