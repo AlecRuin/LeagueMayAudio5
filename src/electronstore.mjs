@@ -8,3 +8,16 @@ export function SetLeagueDirSave(data)
 {
     store.set("LeagueDirSave",data)
 }
+export function GetSavedScript()
+{
+    return store.get("SavedScript")
+}
+export function SetSavedScript(data)
+{
+    store.set("SavedScript",data)
+}
+export function DeleteAllData()
+{
+    store.delete("SavedScript")
+    store.delete("LeagueDirSave")
+}

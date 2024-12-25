@@ -6,7 +6,7 @@ const Speaker = require("speaker")
 const {Lame} = require("node-lame")
 const AudioContext = require("node-web-audio-api").AudioContext
 const fs = require("fs")
-const {getBuffer,AsyncTween,Script,Block,Track} = require("./audioHandler")
+const {getBuffer,AsyncTween,Script,Block,Track} = require("./audioHandler");
 let mainWindow,source,MasterScript
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 let errorTitles=[
@@ -19,11 +19,14 @@ let errorTitles=[
   "You'd think to make a fool of me?",
   "Ashes to ashes"
 ]
-let GetLeagueDirSave,SetLeagueDirSave
+let GetLeagueDirSave,SetLeagueDirSave,GetSavedScript,SetSavedScript,DeleteAllData
 async function loadModules(){
   let module = await import("./electronstore.mjs")
   GetLeagueDirSave=module.GetLeagueDirSave;
-  SetLeagueDirSave = module.SetLeagueDirSave
+  SetLeagueDirSave = module.SetLeagueDirSave;
+  GetSavedScript = module.GetSavedScript;
+  SetSavedScript = module.SetSavedScript;
+  DeleteAllData=module.DeleteAllData;
 }
 loadModules().then(()=>{
   if (require("electron-squirrel-startup")) {
@@ -40,6 +43,9 @@ loadModules().then(()=>{
       {
        label:"File",
        submenu:[
+        {
+          label:"Delete saved settings",click:()=>{DeleteAllData()}
+        },
         {
           label:"Exit",click:()=>{mainWindowState.saveState(); app.exit()}
         }
@@ -103,9 +109,15 @@ loadModules().then(()=>{
     ipcMain.on("ChangeDisplay",(e,DisplayNum)=>{
       MasterScript.changeSelectedScreen(DisplayNum)
     })
-
-
-
+    ipcMain.on("ChangeHeartbeat",(e,value)=>{
+      (value>=1)?MasterScript.heartbeat = value:MasterScript.heartbeat=1;
+      SetSavedScript(MasterScript.toJSON())
+      mainWindow.send("UpdateHeartbeat",(value>=1)?value:1)
+    })
+    ipcMain.on("ChangeValue",(e,index,channel,value)=>{
+      MasterScript.Blocks[index][channel]=value
+      SetSavedScript(MasterScript.toJSON())
+    })
     ipcMain.handle("OpenDirDialog",async()=>{
       const result = await dialog.showOpenDialog({
         properties:["openDirectory"],
@@ -126,12 +138,15 @@ loadModules().then(()=>{
     ipcMain.handle("CreatePriority",()=>{
       let newBlock = new Block()
       MasterScript.addBlock(newBlock)
+      SetSavedScript(MasterScript.toJSON())
       return MasterScript.Blocks.length
     })
     ipcMain.handle("RemovePriority",(index)=>{
       MasterScript.removeBlock(index)
+      SetSavedScript(MasterScript.toJSON())
       return MasterScript.Blocks.length
     })
+   
     ipcMain.handle("GetNumOfPriorities",()=>{
       if (MasterScript.Block)return MasterScript.Block.length
       return 0
@@ -139,6 +154,11 @@ loadModules().then(()=>{
     mainWindow.send("UpdateDisplaySelection",screen.getAllDisplays())
     
     MasterScript = new Script()
+    
+    let Data = GetSavedScript()
+    MasterScript.parseJSON(Data)
+    mainWindow.send("UpdateAll",Data)
+    console.log("Master script: ",MasterScript);
     
     // Connect to the X server
     

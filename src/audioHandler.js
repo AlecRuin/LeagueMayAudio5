@@ -24,15 +24,17 @@ class Script
      * The entire programmable process.  Handles the screen reading.
      */
     #leagueDir
+    #currentPriority
     #selectedScreen
-    constructor(){
+    constructor(LeagueDir,SelectedScreen){
         /**
          * @type {Block[]}
          */
         this.Blocks = []
-        this.currentPriority=0
         this.scanningThread
         this.heartbeat=5
+        this.#leagueDir=LeagueDir
+        this.#selectedScreen=SelectedScreen
     }
     scaleCoord(coord,screenDimensions)
     {
@@ -102,7 +104,15 @@ class Script
      * @returns {{data}}
      */
     toJSON(){
-
+        return {
+            LeagueDir:this.#leagueDir,
+            SelectedScreen:this.#selectedScreen,
+            heartbeat:this.heartbeat,
+            Blocks:this.Blocks.map((item)=>{
+                console.log("item: ",item);
+                 return item.toJSON()
+            })
+        }
     }
     /**
      * 
@@ -110,7 +120,24 @@ class Script
      */
     parseJSON(data)
     {
-
+        console.log("Data saved: ",data);
+        this.currentPriority = data.currentPriority;
+        this.heartbeat = data.heartbeat;
+        if(data.Blocks&&data.Blocks.length>0)
+        {
+            data.Blocks.forEach(element => {
+                console.log("element: ",element);
+                let NewBlock = new Block(element.bIsFadeIn,element.bIsFadeOut,element.bIsRandom,element.bShouldInterrupt,element.spellSlot)
+                if(element.Tracks&&element.Tracks.length>0)
+                {
+                    element.Tracks.forEach((TrackValue)=>{
+                        let NewTrack = new Track(TrackValue.TrackURL)
+                        NewBlock.addTrack(NewTrack)
+                    })
+                }
+                this.addBlock(NewBlock)
+            });
+        }
     }
     #privateFunction()
     {
@@ -127,10 +154,15 @@ class Block
         this.bIsRandom = isRandom||false
         this.status = "inactive"
         this.bShouldInterrupt = interrupt||true
-        this.spellSlot = spellSlot||3
+        this.spellSlot = spellSlot||4
         this.scanStyle = "border"
+        this.scanLocation = "border-start"
+        this.scanCustomLocation //X,Y
+        this.scanColorType = "gold",
+        this.scanColorCustomRGB//R,G,B
+        this.confidence = 0.7
         this.Tracks = []
-        this.Coords
+        this.output = "stop-and-play"
     }
     
     /**
@@ -147,20 +179,40 @@ class Block
     {
         this.Tracks.splice(Index,1)
     }
-    toJSON()
-    {
-
+    toJSON(){
+        return{
+            bIsFadeIn:this.bIsFadeIn,
+            bIsFadeOut:this.bIsFadeOut,
+            bIsRandom:this.bIsRandom,
+            bShouldInterrupt:this.bShouldInterrupt,
+            spellSlot:this.spellSlot,
+            scanStyle:this.scanStyle,
+            scanColorType:this.scanColorType,
+            scanColorCustomRGB:this.scanColorCustomRGB,
+            scanCustomLocation:this.scanCustomLocation,
+            scanLocation:this.scanLocation,
+            confidence:this.confidence,
+            output:this.output,
+            Tracks:this.Tracks.map((item)=>{
+                return item.toJSON()
+            })
+        }
     }
 }
 //A audio segment within a block
 class Track
 {
-    constructor()
+    constructor(TrackURL)
     {
         this.Source
         this.GainNode
-        this.TrackURL
+        this.TrackURL=TrackURL
         this.status
+    }
+    toJSON(){
+        return{
+            TrackURL:this.TrackURL
+        }
     }
 }
 
