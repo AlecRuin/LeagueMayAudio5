@@ -2,7 +2,7 @@ let className = "variables-table"
 import CommonParentUtils from "./parentUtils.js";
 class variables_table extends CommonParentUtils{
     constructor(){
-        super(className);
+        super();
         // this.attachShadow({mode:"open"})
         this.table = document.createElement("table")
         this.table.innerHTML=`
@@ -59,15 +59,19 @@ class variables_table extends CommonParentUtils{
         }
     }
     connectedCallback(){
-        super.connectedCallback(className)
-        window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
-            console.log("NEW DATA: ",Data);
-            if(Data&&Data.Variables){
-                Object.entries(Data.Variables).forEach(([key,value])=>{
-                    this.variableCells[key].textContent=value
-                })
-            }
-        })
+        try {
+            if(!this.UUID)throw new Error("missing UUID")
+            super.connectedCallback(className,this.UUID)
+            window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
+                if(Data&&Data.Variables){
+                    Object.entries(Data.Variables).forEach(([key,value])=>{
+                        this.variableCells[key].textContent=value
+                    })
+                }
+            })
+        } catch (error) {
+            console.error("Error: ",error);
+        }
     }
 }
 customElements.define(className,variables_table)

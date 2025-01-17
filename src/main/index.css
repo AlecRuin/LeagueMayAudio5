@@ -77,7 +77,7 @@ table{
   max-width: 25px;
   max-height: 25px;
 }
-.priorityblock-header{
+priorityblock-header{
   display: flex;
   justify-content: space-between;
   width: 100%;

@@ -2,7 +2,7 @@ let className = "priorityblock-header"
 import CommonParentUtils from "./parentUtils.js";
 class priorityblock_header extends CommonParentUtils{
     constructor(){
-        super(className)
+        super()
         // this.attachShadow({mode:"open"})
         this.div = document.createElement("div")
         this.shadowRoot.appendChild(this.div)
@@ -18,33 +18,35 @@ class priorityblock_header extends CommonParentUtils{
         ]
     }
     connectedCallback(){
-        super.connectedCallback(className);
-        let optionalX = Number(this.getAttribute("optionalX"))
-        let numOfPriorities = Number(this.getAttribute("numOfPriorities"))
-        let PriorityIndex= optionalX||numOfPriorities-1
-        let UUID = Number(this.getAttribute("uuid"))
-        let PlayBtn = document.getElementById("PlayBtn")
-        this.div.innerHTML=`
-            ${
-                (this.PrioityAssets[PriorityIndex])?
-                `<img class=\"priority-icon\" src=\" ${this.PrioityAssets[PriorityIndex].icon}\" />
-                <img class=\"priority-title\" src=\" ${this.PrioityAssets[PriorityIndex].title}\" />`
-                :
-                `
-                <h3 class=\"priority-icon\">#${PriorityIndex}</h3>
-                <h2 class=\"priority-title\">Priority ${PriorityIndex}</h2>
-                `
-            }
-            <button class=\"close-btn\" id=${"closeBtw-"+(UUID)}>X</button>         
-        `
-        this.div.querySelector(".close-btn").addEventListener("click",async()=>{
-            numOfPriorities = await window.electronAPI.InvokeRendererToMain("RemovePriority",UUID);
-            const parentOfParent = this.parentElement?.parentElement;
-            if (parentOfParent) {
-                parentOfParent.remove(); 
-            }
-            (numOfPriorities>0)?PlayBtn.style.display="inline-block":PlayBtn.style.display="none";
-        })
+        try {
+            if(!this.UUID)throw new Error("missing UUID");
+            super.connectedCallback(className,this.UUID);
+            let PriorityIndex= this.optionalX||this.numOfPriorities-1
+            let PlayBtn = document.getElementById("PlayBtn")
+            this.div.innerHTML=`
+                ${
+                    (this.PrioityAssets[PriorityIndex])?
+                    `<img class=\"priority-icon\" src=\" ${this.PrioityAssets[PriorityIndex].icon}\" />
+                    <img class=\"priority-title\" src=\" ${this.PrioityAssets[PriorityIndex].title}\" />`
+                    :
+                    `
+                    <h3 class=\"priority-icon\">#${PriorityIndex}</h3>
+                    <h2 class=\"priority-title\">Priority ${PriorityIndex}</h2>
+                    `
+                }
+                <button class=\"close-btn\" id=${"closeBtw-"+(this.UUID)}>X</button>         
+            `
+            this.div.querySelector(".close-btn").addEventListener("click",async()=>{
+                this.numOfPriorities = await window.electronAPI.InvokeRendererToMain("RemovePriority",this.UUID);
+                const parentOfParent = this.parentElement?.parentElement;
+                if (parentOfParent) {
+                    parentOfParent.remove(); 
+                }
+                (this.numOfPriorities>0)?PlayBtn.style.display="inline-block":PlayBtn.style.display="none";
+            })
+        } catch (error) {
+            console.error("Error: ",error);
+        }
     }
 }
 customElements.define(className,priorityblock_header)

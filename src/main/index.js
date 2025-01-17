@@ -3,6 +3,9 @@ async function LoadModules(){
     console.log("blocktype-start loaded");
     await import("./components/priorityblock-header.js")
     console.log("priorityblock-header loaded");
+    await import("./components/trackoptions.js")
+    console.log("trackoptions loaded");
+    
     console.log("All modules loaded");
 }
 
@@ -105,8 +108,6 @@ async function CreateConditional(UUID,CondArrDiv,options)
 }
 function RefreshTrackList(UUID,SoundsList,Tracks)
 {
-    console.log("Tracks: ",Tracks);
-    
     while (SoundsList.firstChild) {
         SoundsList.firstChild.remove()
         //SoundsList.removeChild(SoundsList.firstChild);
@@ -114,8 +115,6 @@ function RefreshTrackList(UUID,SoundsList,Tracks)
     //recreate all element
     for(let x=0;x<Tracks.length;x++)
     {
-        console.log("Tracks[x]: ",Tracks[x]);
-        
         let NewSoundEntry = document.createElement("div")
         NewSoundEntry.innerHTML=`
             <div>
@@ -217,12 +216,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     let NewPriorityBlockDiv = document.createElement("div")
     NewPriorityBlockDiv.classList.add("priority-block") 
     NewPriorityBlockDiv.id = UUID
-    let PriorityIndex= (optionalX!=undefined)?optionalX:numOfPriorities-1
-    // console.log("Options.scanColorCustomRGB: ",options.scanColorCustomRGB);
-    
     NewPriorityBlockDiv.innerHTML=`
-        <priorityblock-header uuid=${UUID} optionalX=${optionalX} numOfPriorities=${numOfPriorities}></priorityblock-header>
-
         <span class=w-100 id=${"StatusSpan-"+UUID}>Status: 🟠scanning</span><br>
 
         <!--blocktype-starttype is here-->
@@ -258,7 +252,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
                     Y:<input id=${"CustomLocationInputY-"+UUID} type=number value=${(options&&options.scanCustomLocation&&options.scanCustomLocation.length>0)?options.scanCustomLocation[1]:"0"}></input>
                 </span>
             </span>
-            <span id=${"SpellOptionsSpan-"+UUID} style=${(options&&options.spellSlot<5&&options.scanType=="pixel")?"display:inline-block;":"display:none;"}>
+            <span id=${"SpellOptionsSpan-"+UUID} style=${(options&&options.spellSlot>=5)?"display:none;":"display:inline-block;"}>
                  At 
                 <select id=${"ScanLocationSelect-"+(UUID)}>
                     <option ${(options&&options.scanSpellLocation=="border-start")?"selected":""} value=\"border-start\">border start</option>
@@ -288,62 +282,9 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         
             <button id=${"AddCondBtn-"+(UUID)}>Add a conditional</button>
             <div id=${"CondArrDiv-"+(UUID)}></div>
-            <div>
-                I 
-                <select id=${"FadeInSelect-"+(UUID)}>
-                    <option ${(options&&!options.bIsFadeIn)?"selected":""} value=\"false\"> will not </option>
-                    <option ${(options&&options.bIsFadeIn)?"selected":""} value=\"true\"> will </option>
-                </select>
-                fade in the audio track. 
-                <div style=${(options&&options.bIsFadeIn)?"display:inline-block;":"display:none;"} id=${"FadeInInputDiv-"+(UUID)}>
-                    Duration:
-                    <input type=\"number\" id=${"FadeInInput-"+(UUID)} value=${(options&&options.FadeInDuration)?options.FadeInDuration:"1"}></input>
-                </div>
-            </div>
-            
-            <div class=\"w-100\">
-                I
-                <select id=${"FadeOutSelect-"+(UUID)}>
-                    <option ${(options&&!options.bIsFadeOut)?"selected":""} value=\"false\"> will not</option>
-                    <option ${(options&&options.bIsFadeOut)?"selected":""} value=\"true\"> will </option>    
-                </select>
-                fade out the audio track. 
-                <div style=${(options&&options.bIsFadeOut)?"display:inline-block;":"display:none;"} id=${"FadeOutInputDiv-"+(UUID)}>
-                    Duration:
-                    <input type=\"number\" id=${"FadeOutInput-"+(UUID)} value=${(options&&options.FadeOutDuration)?options.FadeOutDuration:"1"}></input>
-                </div>
-            </div>
-            <div>
-                I
-                <select id=${"IsRandomSelect-"+(UUID)}>
-                    <option ${(options&&!options.bIsRandom)?"selected":""} value=\"false\"> will not</option>
-                    <option ${(options&&options.bIsRandom)?"selected":""} value=\"true\"> will </option>
-                </select>
-                play an audio track in a random order. 
-            </div>
-            <div>
-                I
-                <select id=${"UseVisualizerSelect-"+(UUID)}>
-                    <option ${(options&&!options.bUseVisualizer)?"selected":""} value=\"false\"> will not</option>
-                    <option ${(options&&options.bUseVisualizer)?"selected":""}  value=\"true\"> will</option>
-                </select>
-                use the audio visualizer overlay <br>(this can increase CPU usage by up to 10%)
-                <br>
-                <div style=${(options&&options.bUseVisualizer)?"display:inline-block;":"display:none;"} id=${"VisualizerOptionsDiv-"+UUID}>
-                    Line color: <input value=${(options&&options.VisualizerLineColor)?options.VisualizerLineColor:"#2FD4E3"} type="color" id=${"VisLineColorInput-"+UUID}></input>
-                    Fill: <input type=checkbox id=${"FillVisInput-"+UUID} ${(options&&options.bFillVisualizer)?"checked":""}></input> 
-                    <span id=${"VisColorSpan-"+UUID} style=${(options&&options.bFillVisualizer)?"display:inline-block;":"display:none;"}>
-                        Fill color: <input type=color id=${"FillVisColorInput-"+UUID} value=${(options&&options.VisualizerFillColor)?options.VisualizerFillColor:"#2FD4E3"}></input>
-                        Fill pattern: <button id=${"VisFillPatternBtn-"+UUID}>Browse</button>
-                        <span style=${(options&&options.VisualizerFillPatternPath)?"display:inline-block;":"display:none;"} id=${"VisFillPatternSpan-"+UUID}>${(options&&options.VisualizerFillPatternPath)?options.VisualizerFillPatternPath.split(/[/\\]/).pop():""}
-                            <button id=${"VisFillPatternCloseBtn-"+UUID}>X</button> 
-                        </span>
-                    </span>
-                </div>
-
-            </div>
-            
-            <div class="flex w-100 flex-wrap">
+        </div>
+        <div id=ending-form>
+            <div id="add-tracks-div" class="flex w-100 flex-wrap">
                 <p class=\"TracksTitle\">TRACKS</p>
                 <button id=${"SoundsBtn-"+(UUID)}>ADD SFX</button>
             </div>
@@ -358,95 +299,48 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     let ScanLocationSelect = document.getElementById("ScanLocationSelect-"+(UUID))
     let ScanColorSelect = document.getElementById("ScanColorSelect-"+(UUID))
     let ConfidenceInput = document.getElementById("ConfidenceInput-"+(UUID))
-    //let OutputSelect = document.getElementById("OutputSelect-"+(UUID))
-    let FadeInSelect = document.getElementById("FadeInSelect-"+(UUID))
-    let FadeOutSelect = document.getElementById("FadeOutSelect-"+(UUID))
-    let IsRandomSelect = document.getElementById("IsRandomSelect-"+(UUID))
     let SoundsList = document.getElementById("SoundsList-"+(UUID))
     let SoundsBtn = document.getElementById("SoundsBtn-"+(UUID))
-    let StartSelect = document.getElementById("StartSelect-"+(UUID))
-    //let OutputStackSelect =document.getElementById("OutputStackSelect-"+(UUID))
-    let BlockTypeSelect = document.getElementById("BlockTypeSelect-"+(UUID))
     let AddCondBtn = document.getElementById("AddCondBtn-"+(UUID))
     let CondArrDiv = document.getElementById("CondArrDiv-"+(UUID)) 
     let OutputDiv = document.getElementById("OutputDiv-"+(UUID)) 
-    // let OutputXInput = document.getElementById("OutputModiferInput-"+(UUID))
     let condForm = document.getElementById("condForm-"+(UUID))
-    let FadeInInputDiv = document.getElementById("FadeInInputDiv-"+(UUID))
-    let FadeOutInputDiv = document.getElementById("FadeOutInputDiv-"+(UUID))
-    let FadeInInput = document.getElementById("FadeInInput-"+(UUID))
-    let FadeOutInput = document.getElementById("FadeOutInput-"+(UUID))
     let CustomLocationInputX = document.getElementById("CustomLocationInputX-"+(UUID))
     let CustomLocationInputY = document.getElementById("CustomLocationInputY-"+(UUID))
-    //let CustomColorInput = document.getElementById("CustomColorInput-"+UUID)
     let AddOutputBtn = document.getElementById("AddOutputBtn-"+(UUID))
     let ScanTypeSelect=document.getElementById("ScanTypeSelect-"+(UUID))
-    //let SpellArea=document.getElementById("SpellArea-"+(UUID))
-    let UseVisualizerSelect = document.getElementById("UseVisualizerSelect-"+(UUID));
     let ScanImageBrowseBtn = document.getElementById("ScanImageBrowseBtn-"+UUID)
     let ScanImageSpan = document.getElementById("ScanImageSpan-"+UUID)
-    let VisLineColorInput=document.getElementById("VisLineColorInput-"+UUID)
-    let FillVisInput=document.getElementById("FillVisInput-"+UUID)
-    //let bFillVisualizer=document.getElementById("bFillVisualizer-"+UUID)
-    let FillVisColorInput = document.getElementById("FillVisColorInput-"+UUID)
-    let VisColorSpan=document.getElementById("VisColorSpan-"+UUID)
-    let VisualizerOptionsDiv=document.getElementById("VisualizerOptionsDiv-"+UUID)
-    let VisFillPatternBtn = document.getElementById("VisFillPatternBtn-"+UUID)
-    let VisFillPatternSpan = document.getElementById("VisFillPatternSpan-"+UUID)
-    let VisFillPatternCloseBtn = document.getElementById("VisFillPatternCloseBtn-"+UUID)
     let ScanCustomColorInput = document.getElementById("ScanCustomColorInput-"+UUID)
     let SpellCustomColorInput = document.getElementById("SpellCustomColorInput-"+UUID)
     let ScanOptionBorder = document.getElementById("ScanOptionBorder-"+UUID)
     let ScanOptionIcon = document.getElementById("ScanOptionIcon-"+UUID)
     let ScanCustomLocationInput=document.getElementById("ScanCustomLocationInput-"+UUID)
     let SpellOptionsSpan = document.getElementById("SpellOptionsSpan-"+UUID)
+    let StatusSpan=document.getElementById("StatusSpan-"+UUID)
+    let endingform = document.getElementById("ending-form")
+    let addtracksdiv = document.getElementById("add-tracks-div")
 
+    let trackoptions = document.createElement("track-options")
+    trackoptions.UUID=UUID
+    trackoptions.options=options
+    endingform.insertBefore(trackoptions,addtracksdiv)
+
+    let priorityblock_header = document.createElement("priorityblock-header")
+    priorityblock_header.UUID=UUID
+    priorityblock_header.options=options
+    priorityblock_header.optionalX=optionalX
+    priorityblock_header.numOfPriorities=numOfPriorities
+    NewPriorityBlockDiv.insertBefore(priorityblock_header,StatusSpan)
 
     let blocktype_starttype = document.createElement("blocktype-starttype")
     blocktype_starttype.options=options
     blocktype_starttype.UUID=UUID
     NewPriorityBlockDiv.insertBefore(blocktype_starttype,condForm)
 
-    VisFillPatternBtn.addEventListener("click",async()=>{
-        let Path = await window.electronAPI.InvokeRendererToMain("OpenFill",UUID)
-        if(Path){
-            VisFillPatternSpan.style.display="inline-block"
-            console.log("Path: ",Path);
-            
-            VisFillPatternSpan.innerText=Path.split(/[/\\]/).pop();
-        }else{
-            VisFillPatternSpan.style.display="none"
-        }
-    })
-    VisFillPatternCloseBtn.addEventListener("click",()=>{
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"VisualizerFillPatternPath","")
-        VisFillPatternSpan.style.display="none"
-    })
-    FillVisInput.addEventListener("change",()=>{
-        (FillVisInput.checked)?VisColorSpan.style.display="inline-block":VisColorSpan.style.display="none"
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"bFillVisualizer",FillVisInput.checked)
-    })
-    FillVisColorInput.addEventListener("change",()=>{
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"VisualizerFillColor",FillVisColorInput.value)
-    })
-    VisLineColorInput.addEventListener("change",()=>{
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"VisualizerLineColor",VisLineColorInput.value)
-    })
-    UseVisualizerSelect.addEventListener("change",()=>{
-        let value = UseVisualizerSelect.value ==="true";
-        (value)?VisualizerOptionsDiv.style.display="inline-block":VisualizerOptionsDiv.style.display="none";
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"bUseVisualizer",value)
-    })
     AddOutputBtn.addEventListener("click",()=>{
         CreateOutput(UUID,OutputDiv)
     })
-    // SpellArea.addEventListener("change",()=>{
-    //     window.electronAPI.SignalToMain("ChangeValue",UUID,"spellArea",SpellArea.value)
-    // })
-    // ScanType.addEventListener("change",()=>{
-    //     window.electronAPI.SignalToMain("ChangeValue",UUID,"scanType",ScanType.value)
-    // })
-
     function SaveLocation()
     {
         CustomLocationInputX.valueAsNumber=Math.floor(CustomLocationInputX.valueAsNumber)
@@ -460,14 +354,6 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         //let UUID = window.electronAPI.SignalToMain("CreateDestroyCond",true,UUID)
         CreateConditional(UUID,CondArrDiv)
     })
-    FadeOutInput.addEventListener("change",()=>{
-        FadeOutInput.valueAsNumber=Math.floor(FadeOutInput.valueAsNumber)
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"FadeOutDuration",FadeOutInput.valueAsNumber)
-    })
-    FadeInInput.addEventListener("change",()=>{
-        FadeInInput.valueAsNumber=Math.floor(FadeInInput.valueAsNumber)
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"FadeInDuration",FadeInInput.valueAsNumber)
-    })
     heartbeatInput.addEventListener("change",()=>{
         window.electronAPI.SignalToMain("ChangeHeartbeat",heartbeatInput.valueAsNumber)
     })
@@ -475,21 +361,6 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         heartbeatInput.value = input
         savedHeartbeat=input
     })
-    //HERE
-    // document.getElementById("closeBtw-"+(UUID)).addEventListener("click",async()=>{
-    //     numOfPriorities = await window.electronAPI.InvokeRendererToMain("RemovePriority",UUID);
-    //     NewPriorityBlockDiv.remove();
-    //     (numOfPriorities>0)?PlayBtn.style.display="inline-block":PlayBtn.style.display="none";
-    //     (numOfPriorities>=7)?createPriorityBtn.style.display="none":createPriorityBtn.style.display="inline-block";
-    // })
-
-    // OutputStackSelect.addEventListener("change",()=>{
-    //     window.electronAPI.SignalToMain("ChangeValue",UUID,"outputStack",OutputStackSelect.value)
-    // })
-    // OutputXInput.addEventListener("change",()=>{
-    //     OutputXInput.valueAsNumber = Math.floor(OutputXInput.valueAsNumber)
-    //     window.electronAPI.SignalToMain("ChangeValue",UUID,"outputModifier",OutputXInput.valueAsNumber)
-    // })
     SpellCustomColorInput.addEventListener("change",()=>{
         ScanCustomColorInput.value=SpellCustomColorInput.value
         window.electronAPI.SignalToMain("ChangeValue",UUID,"scanColorCustomRGB",SpellCustomColorInput.value) 
@@ -558,20 +429,6 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         //Confirmation
         window.electronAPI.SignalToMain("ChangeValue",UUID,"confidence",ConfidenceInput.valueAsNumber)
     })
-    FadeInSelect.addEventListener("change",()=>{
-        let value = FadeInSelect.value ==="true";
-        (value)?FadeInInputDiv.style.display="inline-block":FadeInInputDiv.style.display="none";
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"bIsFadeIn",value)
-    }) 
-    FadeOutSelect.addEventListener("change",()=>{
-        let value = FadeOutSelect.value ==="true";
-        (value)?FadeOutInputDiv.style.display="inline-block":FadeOutInputDiv.style.display="none";
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"bIsFadeOut",value)
-    })
-    IsRandomSelect.addEventListener("change",()=>{
-        let value = IsRandomSelect.value ==="true";
-        window.electronAPI.SignalToMain("ChangeValue",UUID,"bIsRandom",value)
-    })
     SoundsBtn.addEventListener("click",async()=>{
         //pub the track, and get a return of them and get num of tracks
         const Tracks = await window.electronAPI.InvokeRendererToMain("OpenTrack",UUID)
@@ -612,7 +469,6 @@ window.electronAPI.SignalToRenderer("UpdateDisplaySelection",(numOfDisplays)=>{
     ResolutionDiv.innerHTML = numOfDisplays[0].size.width+"x"+numOfDisplays[0].size.height
 })
 window.electronAPI.SignalToRenderer("UpdateAll",(Data)=>{
-    console.log("Data: ",Data);
     if(Data&&Data.heartbeat)savedHeartbeat=Data.heartbeat;
     if(Data&&Data.leagueDir)LeagueDirSpan.innerHTML=Data.leagueDir;
     if(PriorityContainer.children.length>0)
@@ -660,3 +516,7 @@ window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
 })
 console.log("Flag final");
 LoadModules()
+
+let variables_table=document.createElement("variables-table")
+variables_table.UUID="none"
+document.querySelector(".body").insertBefore(variables_table,PriorityContainer)
