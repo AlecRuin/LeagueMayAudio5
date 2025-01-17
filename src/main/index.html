@@ -10,7 +10,7 @@
 
     </div>
 
-    <div>Select League of Legends dir: <button id="LeagueDir">Open</button> </div>
+    <div>Select League of Legends dir: <button id="LeagueDir">Open</button> <span id="LeagueDirSpan"></span></div>
     <label>Selected display: </label>
     <select id="DisplaySelect">
       
@@ -20,10 +20,13 @@
     </div>
     <button id="PlayBtn">▶️</button>
     <button id="CreatePriorityButton">Create new priority</button>
+    <variables-table></variables-table>
     <div id="PriorityContainer">
-        
+      
     </div>
+    <canvas id="visualizer"></canvas>
+    <button id="test-button">TEST IMAGE SCAN</button>
   </body>
-  <script src="./index.js"></script>
-  <script src="./statements/openingStatement.js"></script>
+  <script type="module" src="./index.js"></script>
+  <script type="module" src="./components/Variables.js"></script>
 </html>

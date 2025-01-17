@@ -1,15 +1,22 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
-
+const path = require("path")
 module.exports = {
   packagerConfig: {
     asar: true,
+    icon:"./src/assets/neroicon.ico",
+    "asar":{
+      "unpack":"**/node_modules/{sharp,@img}/**/*"
+    },
+    name:"League May Audio 5"
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      config: {},
+      config: {
+        setupIcon:"./src/assets/neroicon.ico"
+      },
     },
     {
       name: '@electron-forge/maker-zip',
@@ -17,7 +24,11 @@ module.exports = {
     },
     {
       name: '@electron-forge/maker-deb',
-      config: {},
+      config: {
+        options:{
+          icon:"./src/assets/neroicon.ico"
+        }
+      },
     },
     {
       name: '@electron-forge/maker-rpm',

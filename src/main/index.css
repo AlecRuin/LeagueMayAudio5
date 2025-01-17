@@ -9,6 +9,12 @@ body {
   max-width: 38rem;
   padding: 2rem;
 }
+.m-a{
+  margin: auto;
+}
+.m-10{
+  margin: 10%;
+}
 img{
   object-fit: contain;
 }
@@ -19,6 +25,7 @@ img{
 .priority-title{
   height: auto;
   width: 30%;
+  text-align: center;
 }
 .priority-block{
   display: flex;
@@ -35,6 +42,12 @@ img{
 .w-100{
   width: 100%;
 }
+.flex-wrap{
+  flex-wrap: wrap;
+}
+.flex-align-center{
+  align-items: center;
+}
 .flex{
   display: flex;
 }
@@ -43,5 +56,30 @@ img{
 }
 .close-btn{
   aspect-ratio: 2/1;
-  height: 40%;
+  height: auto;
+  width: 5%;
+}
+.TracksTitle{
+  text-align: center;
+  margin: auto;
+  width: 100%;
+}
+input{
+  max-width: 50px;
+}
+tr{
+  text-align: left;
+}
+table{
+  border-spacing: 2vw;
+}
+.micro{
+  max-width: 25px;
+  max-height: 25px;
+}
+.priorityblock-header{
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  align-items: center;
 }

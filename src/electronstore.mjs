@@ -16,6 +16,14 @@ export function SetSavedScript(data)
 {
     store.set("SavedScript",data)
 }
+export function GetLoggingState()
+{
+    return store.get("LoggingState")
+}
+export function SetLoggingState(data)
+{
+    store.set("LoggingState",data)
+}
 export function DeleteAllData()
 {
     store.delete("SavedScript")
