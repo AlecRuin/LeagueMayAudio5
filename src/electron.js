@@ -334,93 +334,93 @@ loadModules().then(()=>{
  * @param {Number} height 
  * @returns {Array}
  */
-    function captureRegionToArray(x,y,width,height){
-      const screenImage = robot.screen.capture(x,y,width,height)
-      const pixelData=[];
-      for(let i=0;i<screenImage.image.length;i+=4)
-      {
-        pixelData.push({
-          r:screenImage.image[i],
-          g:screenImage.image[i+1],
-          b:screenImage.image[i+2],
-          a:screenImage.image[i+3]
-        })
-      }
-      return pixelData
-    }
-    function getAlpha(currentValue, min, max) {
-      if (currentValue < min) currentValue = min;
-      if (currentValue > max) currentValue = max;
-      return (currentValue - min) / (max - min);
-    }
-    function saveArrayToPNG(pixelData,width,height,outputPath)
-    {
-      const buffer = Buffer.alloc(pixelData.length*4);
-      pixelData.forEach((color,index)=>{
-        const offset = index*4
-        buffer[offset]=color.r
-        buffer[offset+1]=color.g
-        buffer[offset+2]=color.b
-        buffer[offset+3]=color.a
-      })
-      //sharp(buffer,{raw:{width,height,channels:4}}).toFile(path.join(__dirname,"UntouchedRawBuffer.png"))
-      sharp(buffer,{raw:{width,height,channels:4}})
-        .resize(64,64)
-        .raw()
-        .toBuffer()
-        .then((newBuffer)=>{
+    // function captureRegionToArray(x,y,width,height){
+    //   const screenImage = robot.screen.capture(x,y,width,height)
+    //   const pixelData=[];
+    //   for(let i=0;i<screenImage.image.length;i+=4)
+    //   {
+    //     pixelData.push({
+    //       r:screenImage.image[i],
+    //       g:screenImage.image[i+1],
+    //       b:screenImage.image[i+2],
+    //       a:screenImage.image[i+3]
+    //     })
+    //   }
+    //   return pixelData
+    // }
+    // function getAlpha(currentValue, min, max) {
+    //   if (currentValue < min) currentValue = min;
+    //   if (currentValue > max) currentValue = max;
+    //   return (currentValue - min) / (max - min);
+    // }
+    // function saveArrayToPNG(pixelData,width,height,outputPath)
+    // {
+    //   const buffer = Buffer.alloc(pixelData.length*4);
+    //   pixelData.forEach((color,index)=>{
+    //     const offset = index*4
+    //     buffer[offset]=color.r
+    //     buffer[offset+1]=color.g
+    //     buffer[offset+2]=color.b
+    //     buffer[offset+3]=color.a
+    //   })
+    //   //sharp(buffer,{raw:{width,height,channels:4}}).toFile(path.join(__dirname,"UntouchedRawBuffer.png"))
+    //   sharp(buffer,{raw:{width,height,channels:4}})
+    //     .resize(64,64)
+    //     .raw()
+    //     .toBuffer()
+    //     .then((newBuffer)=>{
 
-          const FixedBuffer = Buffer.alloc(newBuffer.length)
-          for (let i=0;i<newBuffer.length;i+=4)
-          {
-            FixedBuffer[i] = newBuffer[i + 2];     // Red
-            FixedBuffer[i + 1] = newBuffer[i + 1]; // Green
-            FixedBuffer[i + 2] = newBuffer[i];     // Blue
-            FixedBuffer[i + 3] = newBuffer[i + 3]; // Alpha
-          }
-          //sharp(FixedBuffer,{raw:{width,height,channels:4}}).toFile(path.join(__dirname,"Buffer1.png"))
-          console.log(typeof FixedBuffer);
-          sharp(path.join(__dirname,"aatrox_r.png")).resize(64,64).ensureAlpha().raw().toBuffer().then((imageBuffer)=>{
-            console.log(typeof imageBuffer);
-            if (FixedBuffer.length !== imageBuffer.length) {
-              console.error("Buffer lengths do not match!");
-              console.log("New Buffer Length:", FixedBuffer.length);
-              console.log("Image Buffer Length:", imageBuffer.length);
-              return;
-            }
-            const diff = Buffer.alloc(FixedBuffer.length)
-            const NumOfMismatch = Pixelmatch(imageBuffer,FixedBuffer,diff,64,64,{diffMask:true,threshold: 0.2})
-            console.log("square area of image: ",width*height);
+    //       const FixedBuffer = Buffer.alloc(newBuffer.length)
+    //       for (let i=0;i<newBuffer.length;i+=4)
+    //       {
+    //         FixedBuffer[i] = newBuffer[i + 2];     // Red
+    //         FixedBuffer[i + 1] = newBuffer[i + 1]; // Green
+    //         FixedBuffer[i + 2] = newBuffer[i];     // Blue
+    //         FixedBuffer[i + 3] = newBuffer[i + 3]; // Alpha
+    //       }
+    //       //sharp(FixedBuffer,{raw:{width,height,channels:4}}).toFile(path.join(__dirname,"Buffer1.png"))
+    //       console.log(typeof FixedBuffer);
+    //       sharp(path.join(__dirname,"aatrox_r.png")).resize(64,64).ensureAlpha().raw().toBuffer().then((imageBuffer)=>{
+    //         console.log(typeof imageBuffer);
+    //         if (FixedBuffer.length !== imageBuffer.length) {
+    //           console.error("Buffer lengths do not match!");
+    //           console.log("New Buffer Length:", FixedBuffer.length);
+    //           console.log("Image Buffer Length:", imageBuffer.length);
+    //           return;
+    //         }
+    //         const diff = Buffer.alloc(FixedBuffer.length)
+    //         const NumOfMismatch = Pixelmatch(imageBuffer,FixedBuffer,diff,64,64,{diffMask:true,threshold: 0.2})
+    //         console.log("square area of image: ",width*height);
             
-            let Similarity = 1-getAlpha(NumOfMismatch,0,width*height)
-            console.log("similarity: ",Similarity);
+    //         let Similarity = 1-getAlpha(NumOfMismatch,0,width*height)
+    //         console.log("similarity: ",Similarity);
             
-            console.log("Num of mismatch pixels: ",NumOfMismatch);
-            sharp(diff, { raw: { width: 64, height: 64, channels: 4 } })
-                .toFile(path.join(__dirname,"diff.png"))
-                .then(() => console.log("Diff image saved as diff.png"))
-                .catch((err) => console.error("Error saving diff image:", err));
-          })
-        })
-        .catch((err)=>console.log("error: ",err));
-        sharp(path.join(__dirname,"aatrox_r.png")).resize(64,64).ensureAlpha().toFile(path.join(__dirname,"Buffer2.png"))
-    }
+    //         console.log("Num of mismatch pixels: ",NumOfMismatch);
+    //         sharp(diff, { raw: { width: 64, height: 64, channels: 4 } })
+    //             .toFile(path.join(__dirname,"diff.png"))
+    //             .then(() => console.log("Diff image saved as diff.png"))
+    //             .catch((err) => console.error("Error saving diff image:", err));
+    //       })
+    //     })
+    //     .catch((err)=>console.log("error: ",err));
+    //     sharp(path.join(__dirname,"aatrox_r.png")).resize(64,64).ensureAlpha().toFile(path.join(__dirname,"Buffer2.png"))
+    // }
 
-    ipcMain.on("TestImageScanToggle",(e)=>{
-      ToggleState=!ToggleState
-      if(ToggleState)
-      {
-        //1165x1346  64
-        // 1246 X
-        // 1283 Y
-        //NEEDS TO BE TOP LEFT CORNER
-        let x=1165+81 ,y=1346-63,width=64,height=64
-        const pixelData=captureRegionToArray(x,y,width,height)
-        console.log("PixelData: ",pixelData);
-        saveArrayToPNG(pixelData, width, height, path.join(__dirname,'output.png'));
-        //const screen = robot.screen.capture(z)
-      }
-    })
+    // ipcMain.on("TestImageScanToggle",(e)=>{
+    //   ToggleState=!ToggleState
+    //   if(ToggleState)
+    //   {
+    //     //1165x1346  64
+    //     // 1246 X
+    //     // 1283 Y
+    //     //NEEDS TO BE TOP LEFT CORNER
+    //     let x=1165+81 ,y=1346-63,width=64,height=64
+    //     const pixelData=captureRegionToArray(x,y,width,height)
+    //     console.log("PixelData: ",pixelData);
+    //     saveArrayToPNG(pixelData, width, height, path.join(__dirname,'output.png'));
+    //     //const screen = robot.screen.capture(z)
+    //   }
+    // })
 
     // ipcMain.on("ChangeDisplay",(e,DisplayNum)=>{
     //   MasterScript.changeSelectedScreen(screen.getAllDisplays()[DisplayNum])
@@ -641,6 +641,7 @@ loadModules().then(()=>{
     MasterScript.parseJSON(Data)
     mainWindow.send("UpdateAll",MasterScript)
     updateDisplayCount()
+    
     //#region KEYBOARD LISTENER
     if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Attaching keyboard listener...");
     let kbListener
