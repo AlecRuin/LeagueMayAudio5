@@ -6,7 +6,7 @@
   "main": "src/electron.js",
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
+    "package": "env NODE_ENV=production electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
@@ -32,6 +32,7 @@
   "license": "MIT",
   "dependencies": {
     "@img/sharp-win32-x64": "^0.33.5",
+    "dotenv": "^16.4.7",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^10.0.0",
     "electron-window-state": "^5.0.3",

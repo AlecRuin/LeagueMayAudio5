@@ -645,9 +645,6 @@ createPriorityBtn.addEventListener("click",async(e)=>{
 PlayBtn.addEventListener("click",()=>{
     window.electronAPI.SignalToMain("PlayPauseScan");
 });
-document.getElementById("test-button").addEventListener("click",()=>{
-    window.electronAPI.SignalToMain("TestImageScanToggle")
-})
 window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
     if(Data&&Data.Blocks){
         for(let x=0;x<Data.Blocks.length;x++){

@@ -5,6 +5,7 @@ const robot = require("robotjs")
 const sharp = require("sharp")
 //const pixelmatch = require("pixelmatch")
 const fs = require("fs")
+require("dotenv").config()
 const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,setLoggingState,ErrorParse} = require("./audioHandler");
 const {ClearFile,Log,SetDir} = require("./logging.js")
 const {GlobalKeyboardListener} = require("node-global-key-listener")
@@ -196,9 +197,10 @@ loadModules().then(()=>{
     if(mainWindowState.isMaximized)mainWindow.maximize();
     // and load the index.html of the app.
     mainWindow.loadFile(path.join(__dirname, 'main/index.html'));
-  
-    // Open the DevTools.
-    mainWindow.webContents.openDevTools();
+    if(process.env.NODE_ENV=="development"){
+      // Open the DevTools.
+      mainWindow.webContents.openDevTools();
+    }
   
     mainWindow.on("close",(e)=>{
       mainWindowState.saveState()
@@ -641,7 +643,7 @@ loadModules().then(()=>{
     MasterScript.parseJSON(Data)
     mainWindow.send("UpdateAll",MasterScript)
     updateDisplayCount()
-    
+
     //#region KEYBOARD LISTENER
     if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Attaching keyboard listener...");
     let kbListener
