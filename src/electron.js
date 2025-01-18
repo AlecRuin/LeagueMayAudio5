@@ -22,7 +22,7 @@ let errorTitles=[
   "You'd think to make a fool of me?",
   "Ashes to ashes"
 ]
-let GetLeagueDirSave,SetLeagueDirSave,GetSavedScript,SetSavedScript,DeleteAllData,dialogBox,saveLocation,GetLoggingState,SetLoggingState,Pixelmatch
+let GetLeagueDirSave,SetLeagueDirSave,GetSavedScript,SetSavedScript,DeleteAllData,dialogBox,saveLocation,GetLoggingState,SetLoggingState,Pixelmatch,bIsVerboseLogging
 async function loadModules(){
   let module = await import("./electronstore.mjs")
   let module2 = await import("./pixelmatcher.mjs")
@@ -49,14 +49,18 @@ async function Open()
       const data = JSON.parse(jsonData);
       if(bIsVerboseLogging)Log(ErrorParse(new Error()),data);
       MasterScript.parseJSON(data)
-      mainWindow.send("UpdateAll",data)
+      mainWindow.send("UpdateAll",MasterScript)
       } catch (error) {
         console.error("Error reading or parsing JSON file:", error.message);
-        dialog.showMessageBox(null,{
+        dialogBox = dialog.showMessageBox(null,{
           message: "There was problem reading the .JSON file. Contact Valentine",
           title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
           icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
         })
+        const result = await dialogBox
+        if(result){
+          dialogBox=undefined
+        }
       }
   }
   dialogBox=undefined
@@ -89,7 +93,7 @@ async function SaveAs()
   dialogBox=undefined
 }
 loadModules().then(()=>{
-  let bIsVerboseLogging = GetLoggingState()||false;
+  bIsVerboseLogging = GetLoggingState()||false;
   setLoggingState(bIsVerboseLogging)
   if (require("electron-squirrel-startup")) {
     app.quit();
@@ -233,7 +237,7 @@ loadModules().then(()=>{
     overlayWindow.setIgnoreMouseEvents(true);
     // overlayWindow.setVisibleOnAllWorkspaces(true);
     // overlayWindow.setAlwaysOnTop(true, 'floating');
-    //overlayWindow.webContents.openDevTools();
+    // overlayWindow.webContents.openDevTools();
     overlayWindow.on('blur', () => {
       overlayWindow.moveTop();
     });
@@ -261,8 +265,6 @@ loadModules().then(()=>{
     }
     screen.on('display-added',updateDisplayCount);
     screen.on('display-removed', updateDisplayCount);
-    let ToggleState=false
-
     Play=async function(bIsTesting){
       if(bIsTesting){
         if(!fs.existsSync(path.join(app.getPath("userData"),"TestScans"))){
@@ -661,48 +663,6 @@ loadModules().then(()=>{
     })
     //#endregion
    
-    // if(bIsVerboseLogging)Log(ErrorParse(new Error()),path.join(__dirname,"./Devil Trigger Start.wav"));
-    // const audioContext = new AudioContext()
-    // async function Play()
-    // {
-    //   try {
-    //   // const speaker = new Speaker({
-    //   //   channels:2,
-    //   //   bitDepth:24,
-    //   //   sampleRate:48000
-    //   // })//
-      
-    //   let audioBuffer = await getBuffer(audioContext,"./Despair.mp3")
-
-    //   source = audioContext.createBufferSource();
-    //   source.buffer = audioBuffer 
-    //   const gainNode = audioContext.createGain()
-    //   gainNode.gain.value=1.0
-    //   source.connect(gainNode)
-    //   gainNode.connect(audioContext.destination)
-    //   source.start()
-    //   // setTimeout(()=>{
-    //   //   gainNode.gain.value=0.1
-    //   // },1000)
-
-    //   source.onended = ()=>{
-    //     if(bIsVerboseLogging)Log(ErrorParse(new Error()),"song ended?");
-    //     if(source)source.disconnect()
-    //   }
-
-    //   AsyncTween(gainNode,1,0,3000)
-    //   if(bIsVerboseLogging)Log(ErrorParse(new Error()),"working");
-      
-    //   // setTimeout(()=>{
-    //   //   source.stop()
-    //   //   //stops the song
-    //   // },3000)
-    //   } catch (error) {
-    //     if(bIsVerboseLogging)Log(ErrorParse(new Error()),"error: ",error)
-    //   }
-    // }
-    
-    //Play()
   })
   // Quit when all windows are closed, except on macOS. There, it's common
   // for applications and their menu bar to stay active until the user quits

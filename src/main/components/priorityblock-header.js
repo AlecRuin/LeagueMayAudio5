@@ -21,8 +21,9 @@ class priorityblock_header extends CommonParentUtils{
         try {
             if(!this.UUID)throw new Error("missing UUID");
             super.connectedCallback(className,this.UUID);
-            let PriorityIndex= this.optionalX||this.numOfPriorities-1
+            let PriorityIndex= (this.optionalX!=undefined)?this.optionalX:this.numOfPriorities-1
             let PlayBtn = document.getElementById("PlayBtn")
+            
             this.div.innerHTML=`
                 ${
                     (this.PrioityAssets[PriorityIndex])?

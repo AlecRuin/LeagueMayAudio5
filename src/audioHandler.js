@@ -433,6 +433,8 @@ class Script
             if(bIsVerboseLogging)Log(ErrorParse(new Error()),"STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
             return PreventIndex
         }
+        console.log("Output array: ",Block.outputArray);
+        
         for(let x=0;x<Block.outputArray.length;x++){
             let Stop=false;
             let Play,PlayAll,Prevent,Add,Sub,Set=false
@@ -463,6 +465,8 @@ class Script
                     throw new Error("Output type isn't valid")
                     break;
             }
+            console.log("Output: ",output);
+            
             if(Block.status=="scanning"||(Block.Started==false&&Block.startStatus=="playing"))
             { 
                 if(Block.Started==false&&Block.startStatus=="playing")Block.Started=true;
@@ -559,98 +563,67 @@ class Script
             //insert evil ass rape scanner
             for(let BlockIndex=this.Blocks.length-1;BlockIndex>=0;BlockIndex--){
                 let Block = this.Blocks[BlockIndex]
-                // let conditionMet=false
-                //if(Block.status=="playing"&&(Block.output=="stop-prevent-and-play"||Block.output=="stop-prevent-and-play-all"))PreventIndex=BlockIndex;
-                // if(Block.startStatus=="playing"&&!Block.Started)
-                // {
-                //     if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK STARTS ACTIVE");
-                //     conditionMet=true;
-                //     Block.Started=true;
-                // }
-                // if(Block.status=="scanning"&&Block.blockType=="image-scan")
-                // {
-                //     if(Block.scanType=="pixel")
-                //     {
-                //         if(Block.spellArea=="border")
-                //         {
-                //             //Do image scanning
-                //             console.log("Block.TargetLocation: ",Block.targetLocation);
-                //             let TargetCoordinates = {x:Block.targetLocation.X,y:Block.targetLocation.Y}
-                //             console.log("Target Coordinates: ",TargetCoordinates);
-                //             let ColorAtPixel = getPixelColor(TargetCoordinates)
-                //             conditionMet = isWithinConfidence(Block.targetColor,ColorAtPixel,Block.confidence) 
-                //             if(conditionMet)if(bIsVerboseLogging)Log(ErrorParse(new Error()),"IMAGE CONDITION MET");
-                            
-                //         }else if(Block.spellArea=="icon")
-                //         {
-                //             //Do image scanning tech for icon
-                //         }
-                //     }else if(Block.scanType=="image"){
-                //         //Do image scanning tech
-                //     }
-                // }
                 console.log("BlockIndex: ",BlockIndex);
-                
-                // console.log("Block: ",Block);
-                
                 this.checkImageScan(Block).then(result=>{
+                    console.log("Result of image scan: ",result);
+                    
                     if(result)
                     {
                         PreventIndex=this.doOutputs(Block,BlockIndex,PreventIndex,window)
                     }else{
                         // if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CONDITION WAS NOT MET");
                     }
+                    for(let z=0;z<Block.conditionalArray.length;z++){
+                        let Cond = Block.conditionalArray[z]
+                        let ConditionalMet=false
+                        switch (Cond.condOperator) {
+                            case "==":
+                                if(Variables[Cond.condStack]==Cond.condInput)ConditionalMet=true;
+                                break;
+                            case ">=":
+                                if(Variables[Cond.condStack]>=Cond.condInput)ConditionalMet=true;
+                                break;
+                            case "<=":
+                                if(Variables[Cond.condStack]<=Cond.condInput)ConditionalMet=true;
+                                break;
+                            case "<":
+                                if(Variables[Cond.condStack]<Cond.condInput)ConditionalMet=true;
+                                break;
+                            case ">":
+                                if(Variables[Cond.condStack]>Cond.condInput)ConditionalMet=true;
+                                break;
+                        }
+                        if (ConditionalMet){
+                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
+                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.Status: ",Block.status);
+                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Cond.condOutput: ",Cond.condOutput);
+                            if(PreventIndex<=BlockIndex)
+                            {
+                                // if(bIsVerboseLogging)Log(ErrorParse(new Error()),"block: ",Block.status);
+                                if(Block.status!="playing"){if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK IS NO LONGER ACTIVE");}
+                                if(Block.status=="playing"&&Cond.condOutput!="playing"){
+                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"STOP THAT SHIT RN");   
+                                    Block.stopAllTracks()
+                                }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
+                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"PLAY THAT SHIT RN");
+                                    if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
+                                    this.doOutputs(Block,BlockIndex,PreventIndex,window)
+                                }else if(Block.status!=Cond.condOutput)
+                                {
+                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.Status: ",Block.status);
+                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Cond.condOutput: ",Cond.condOutput);
+                                    Block.status==Cond.condOutput
+                                }else{
+                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"SOMETHING IS SERIOUSLY WRONG WITH THE CONDITIONAL LOGIC!!");
+                                }
+                            }else{
+                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"ACTION STOPPED DUE TO PREVENTION");
+                            }
+                        }
+                    }
                 })
                 //TODO CHECK CONDITIONALS
                 //if(bIsVerboseLogging)Log(ErrorParse(new Error()),"block: ",Block.conditionalArray);
-                for(let z=0;z<Block.conditionalArray.length;z++){
-                    let Cond = Block.conditionalArray[z]
-                    let ConditionalMet=false
-                    switch (Cond.condOperator) {
-                        case "==":
-                            if(Variables[Cond.condStack]==Cond.condInput)ConditionalMet=true;
-                            break;
-                        case ">=":
-                            if(Variables[Cond.condStack]>=Cond.condInput)ConditionalMet=true;
-                            break;
-                        case "<=":
-                            if(Variables[Cond.condStack]<=Cond.condInput)ConditionalMet=true;
-                            break;
-                        case "<":
-                            if(Variables[Cond.condStack]<Cond.condInput)ConditionalMet=true;
-                            break;
-                        case ">":
-                            if(Variables[Cond.condStack]>Cond.condInput)ConditionalMet=true;
-                            break;
-                    }
-                    if (ConditionalMet){
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.Status: ",Block.status);
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Cond.condOutput: ",Cond.condOutput);
-                        if(PreventIndex<=BlockIndex)
-                        {
-                            // if(bIsVerboseLogging)Log(ErrorParse(new Error()),"block: ",Block.status);
-                            if(Block.status!="playing"){if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK IS NO LONGER ACTIVE");}
-                            if(Block.status=="playing"&&Cond.condOutput!="playing"){
-                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"STOP THAT SHIT RN");   
-                                Block.stopAllTracks()
-                            }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
-                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"PLAY THAT SHIT RN");
-                                if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
-                                this.doOutputs(Block,BlockIndex,PreventIndex,window)
-                            }else if(Block.status!=Cond.condOutput)
-                            {
-                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.Status: ",Block.status);
-                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Cond.condOutput: ",Cond.condOutput);
-                                Block.status==Cond.condOutput
-                            }else{
-                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"SOMETHING IS SERIOUSLY WRONG WITH THE CONDITIONAL LOGIC!!");
-                            }
-                        }else{
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"ACTION STOPPED DUE TO PREVENTION");
-                        }
-                    }
-                }
             }
         },this.heartbeat)
     }
@@ -701,6 +674,8 @@ class Script
      */
     parseJSON(data)
     {
+        console.log("bIsVerboseLogging: ",bIsVerboseLogging);
+        
         if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Data saved: ",data);
         if(data&&data.currentPriority)this.currentPriority = data.currentPriority;
         if(data&&data.heartbeat)this.heartbeat = data.heartbeat;

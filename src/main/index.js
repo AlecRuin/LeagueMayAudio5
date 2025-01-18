@@ -138,7 +138,7 @@ function RefreshTrackList(UUID,SoundsList,Tracks)
 async function CreateOutput(UUID,OutputDiv,options)
 {
     const OutputUUID = (options&&options.UUID)?options.UUID:await window.electronAPI.InvokeRendererToMain("CreateDestroyOutput",true,UUID);
-    console.log("UUID: ",UUID);
+    // console.log("UUID: ",UUID);
     let NewOutput=document.createElement("li")
     NewOutput.innerHTML=`
     <select class="OutputSelect" id=${"OutputSelect-"+(UUID)+"-"+(OutputUUID)}>   
@@ -217,6 +217,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     NewPriorityBlockDiv.classList.add("priority-block") 
     NewPriorityBlockDiv.id = UUID
     NewPriorityBlockDiv.innerHTML=`
+        <!-- priorityblock_header is here-->
+
         <span class=w-100 id=${"StatusSpan-"+UUID}>Status: 🟠scanning</span><br>
 
         <!--blocktype-starttype is here-->
@@ -235,8 +237,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
             <!-- SHOW THIS ONLY IF OPTIONS.SPELLSLOT<5 -->
             <span>
                 <select id=${"ScanTypeSelect-"+(UUID)}>
-                    <option id=${"ScanOptionBorder-"+UUID} ${(options&&options.scanType=="pixel")?"selected":""} value="pixel">${((options&&options.spellSlot>=6))?"":"'s Border "}for a pixel</option>
-                    <option id=${"ScanOptionIcon-"+UUID} ${(options&&options.scanType=="image")?"selected":""} value="image">${((options&&options.spellSlot>=6))?"":"'s Icon "}for an image</option>
+                    <option id=${"ScanOptionBorder-"+UUID} ${(options&&options.scanType=="pixel")?"selected":""} value="pixel">${((options&&options.spellSlot>=5))?"":"'s Border "}for a pixel</option>
+                    <option id=${"ScanOptionIcon-"+UUID} ${(options&&options.scanType=="image")?"selected":""} value="image">${((options&&options.spellSlot>=5))?"":"'s Icon "}for an image</option>
                 </select>
 
                 <button id=${"ScanImageBrowseBtn-"+UUID} style=${(options&&options.scanType=="image")?"display:inline-block;":"display:none;"}>Browse</button>
@@ -283,8 +285,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
             <button id=${"AddCondBtn-"+(UUID)}>Add a conditional</button>
             <div id=${"CondArrDiv-"+(UUID)}></div>
         </div>
-        <div id=ending-form>
-            <div id="add-tracks-div" class="flex w-100 flex-wrap">
+        <div id=${"ending-form-"+UUID}>
+            <div id=${"add-tracks-div-"+UUID} class="flex w-100 flex-wrap">
                 <p class=\"TracksTitle\">TRACKS</p>
                 <button id=${"SoundsBtn-"+(UUID)}>ADD SFX</button>
             </div>
@@ -318,8 +320,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     let ScanCustomLocationInput=document.getElementById("ScanCustomLocationInput-"+UUID)
     let SpellOptionsSpan = document.getElementById("SpellOptionsSpan-"+UUID)
     let StatusSpan=document.getElementById("StatusSpan-"+UUID)
-    let endingform = document.getElementById("ending-form")
-    let addtracksdiv = document.getElementById("add-tracks-div")
+    let endingform = document.getElementById("ending-form-"+UUID)
+    let addtracksdiv = document.getElementById("add-tracks-div-"+UUID)
 
     let trackoptions = document.createElement("track-options")
     trackoptions.UUID=UUID
@@ -405,8 +407,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         // console.log("ScanTypeSelect.value: ",ScanTypeSelect.value);
         (ScanTypeSelect.value=="pixel"&&SpellslotSelect.value>=5)?ScanCustomColorInput.style.display="inline-block":ScanCustomColorInput.style.display="none";
         (SpellslotSelect.value<5&&ScanTypeSelect.value=="pixel")?SpellOptionsSpan.style.display="inline-block":SpellOptionsSpan.style.display="none"
-        ScanOptionBorder.text=`${(SpellslotSelect.value<6)?"'s Border ":""}for a pixel`
-        ScanOptionIcon.text=`${(SpellslotSelect.value<6)?"'s Icon ":""}for an image`
+        ScanOptionBorder.text=`${(SpellslotSelect.value<5)?"'s Border ":""}for a pixel`
+        ScanOptionIcon.text=`${(SpellslotSelect.value<5)?"'s Icon ":""}for an image`
         ScanCustomLocationInput.style.display=(SpellslotSelect.value==6)?"inline-block":"none"
         window.electronAPI.SignalToMain("ChangeValue",UUID,"spellSlot",+SpellslotSelect.value)
     })
@@ -519,4 +521,4 @@ LoadModules()
 
 let variables_table=document.createElement("variables-table")
 variables_table.UUID="none"
-document.querySelector(".body").insertBefore(variables_table,PriorityContainer)
+document.querySelector(".body").insertBefore(variables_table,document.querySelector(".body-container"))

@@ -6,23 +6,42 @@
     <link rel="stylesheet" href="index.css" />
   </head>
   <body class="body">
-    <div id="root">
-
-    </div>
-
-    <div>Select League of Legends dir: <button id="LeagueDir">Open</button> <span id="LeagueDirSpan"></span></div>
-    <label>Selected display: </label>
-    <select id="DisplaySelect">
-      
-    </select>
-    <div>
+    <div class="m-a w-85">
+      <div>Select League of Legends dir: <button id="LeagueDir">Open</button> <span id="LeagueDirSpan"></span></div>
+      <label>Selected display: </label>
+      <select id="DisplaySelect"></select><br>
       Selected display's resolution: <span id="ResolutionDiv"></span>
+      <br>
+      <button id="PlayBtn">▶️</button>
+      <button id="CreatePriorityButton">Create new priority</button>
     </div>
-    <button id="PlayBtn">▶️</button>
-    <button id="CreatePriorityButton">Create new priority</button>
     <!-- <variables-table></variables-table> -->
-    <div id="PriorityContainer">
-      
+    <div class="body-container">
+      <div class="column-display">
+        Low priority
+        <div style="width: 100%; height:70%; position: relative; max-width: 87px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="position: absolute; top: 0; left: 0; width: 100%; height: 85%;" preserveAspectRatio="none">
+            <rect x="10.15" y="0" style="height: 100%;width:16%"/> <!-- Shaft -->
+          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 25%;" preserveAspectRatio="xMidYMid meet">
+            <path d="M12 24L4 12h6V0h4v12h6L12 24z"/> <!-- Tip -->
+          </svg>
+        </div>
+        High priority
+      </div>
+      <div id="PriorityContainer"></div>
+      <div class="column-display">
+        Low priority
+        <div style="width: 100%; height:70%; position: relative; max-width: 87px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="position: absolute; top: 0; left: 0; width: 100%; height: 85%;" preserveAspectRatio="none">
+            <rect x="10.15" y="0" style="height: 100%;width:16%"/> <!-- Shaft -->
+          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 25%;" preserveAspectRatio="xMidYMid meet">
+            <path d="M12 24L4 12h6V0h4v12h6L12 24z"/> <!-- Tip -->
+          </svg>
+        </div>
+        High priority
+      </div>
     </div>
   </body>
   <script type="module" src="./index.js"></script>
