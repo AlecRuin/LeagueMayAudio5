@@ -6,7 +6,7 @@ const sharp = require("sharp")
 //const pixelmatch = require("pixelmatch")
 const fs = require("fs")
 require("dotenv").config()
-const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,setLoggingState,ErrorParse} = require("./audioHandler");
+const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,setLoggingState,ErrorParse,hexToRGB} = require("./audioHandler");
 const {ClearFile,Log,SetDir} = require("./logging.js")
 const {GlobalKeyboardListener} = require("node-global-key-listener")
 SetDir(app.getPath("userData"))
@@ -94,6 +94,8 @@ async function SaveAs()
 }
 loadModules().then(()=>{
   bIsVerboseLogging = GetLoggingState()||false;
+  let bIsMouseDebugTools =false
+  let MouseDebugThread
   setLoggingState(bIsVerboseLogging)
   if (require("electron-squirrel-startup")) {
     app.quit();
@@ -161,7 +163,7 @@ loadModules().then(()=>{
           },{
             label:"Stop",accelerator:"CommandOrControl+]",click:()=>Stop()
           },{
-            label:"Run test scans",accelerator:"CommandOrControl+T",click:()=>{
+            label:"Run test scans",accelerator:"CommandOrControl+\\",click:()=>{
               Play(true)
             }
           }
@@ -180,6 +182,28 @@ loadModules().then(()=>{
               bIsVerboseLogging=!bIsVerboseLogging;
               SetLoggingState(bIsVerboseLogging)
               if(bIsVerboseLogging)shell.showItemInFolder(path.join(app.getPath("userData"),"log.txt"))
+            }
+          },
+          {
+            label:"Toggle mouse debug tools",click:()=>{
+              bIsMouseDebugTools=!bIsMouseDebugTools
+              mainWindow.send("ToggleMouseDebugTools",bIsMouseDebugTools)
+              if(bIsMouseDebugTools){
+                if(MouseDebugThread)clearInterval(MouseDebugThread); 
+                MouseDebugThread=setInterval(() => {
+                  let MousePos = robot.getMousePos()
+                  let primarydisplay = screen.getPrimaryDisplay()
+                  let flag=false
+                  if(MousePos.x>primarydisplay.bounds.width||MousePos.x<primarydisplay.x){
+                    flag=true
+                  }else if(MousePos.y>primarydisplay.bounds.height||MousePos.y<primarydisplay.y){
+                    flag=true
+                  }
+                  mainWindow.send("MouseDetails",{Pos:MousePos,Color:(flag)?"NaN/Out of bounds":hexToRGB(robot.getPixelColor(MousePos.x,MousePos.y))})
+                }, 50);
+              }else{
+                clearInterval(MouseDebugThread)
+              }
             }
           }
         ]
@@ -286,6 +310,7 @@ loadModules().then(()=>{
           title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
           icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
         });
+        
         return;
       }
       if(!MasterScript.getLeagueDir()){
@@ -298,6 +323,7 @@ loadModules().then(()=>{
         return;
       }
       if(bIsVerboseLogging)Log(ErrorParse(new Error()),"master script selected screen: ",MasterScript.getSelectedScreen());
+      if(!MasterScript.getSelectedScreen())MasterScript.changeSelectedScreen(screen.getPrimaryDisplay())
       if(!ScanningAbilityBorderLocations[4][""+MasterScript.getSelectedScreen().size.height]){
         if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Screen isnt supported");
         if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Blocks: ",MasterScript.Blocks);
@@ -310,6 +336,7 @@ loadModules().then(()=>{
               title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
               icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
             })
+            
             return;
           }
         })
@@ -325,6 +352,7 @@ loadModules().then(()=>{
         mainWindow.send("UpdatePlayPauseState",true)
         //when finished, open dir
       }
+      
     }
     Stop=function(){
       MasterScript.stopScanning();
@@ -658,6 +686,7 @@ loadModules().then(()=>{
         console.log("Stop playing");
         Stop()
       }else if(e.state=="DOWN"&&e.name=="BACKSLASH"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
+        if(mainWindow.isFocused())return;
         Play(true)
       }
     })

@@ -5,6 +5,8 @@ async function LoadModules(){
     console.log("priorityblock-header loaded");
     await import("./components/trackoptions.js")
     console.log("trackoptions loaded");
+    await import ("./components/conditional.js")
+    console.log("conditional loaded");
     
     console.log("All modules loaded");
 }
@@ -16,6 +18,9 @@ let createPriorityBtn = document.getElementById("CreatePriorityButton")
 let PlayBtn = document.getElementById("PlayBtn")
 let LeagueDirSpan = document.getElementById("LeagueDirSpan")
 let PriorityContainer = document.getElementById("PriorityContainer")
+let MouseDebugDiv = document.getElementById("mouse-debug-tools")
+let MousePosSpan = document.getElementById("mouse-pos-span")
+let MouseColorSpan = document.getElementById("mouse-color-span")
 let NumOfDisplays,numOfPriorities,savedHeartbeat
 let PrioityAssets=[
     {icon:"./assets/icons/D.png",title:"./assets/titles/Dismal.png"},
@@ -43,68 +48,11 @@ Number.prototype.clamp = function(min, max) {
 async function CreateConditional(UUID,CondArrDiv,options)
 {
     const CondIndex =(options&&options.UUID)?options.UUID:await window.electronAPI.InvokeRendererToMain("CreateDestroyCond",true,UUID)
-    let NewCondBlock = document.createElement("div")
-    NewCondBlock.innerHTML=`
-    If
-    <select class="CondOperatorSelect" id=${"CondOperatorSelect-"+(UUID)+"-"+CondIndex}>
-        <option ${(options&&options.condOperator=="")?"selected":""} value=\"\"></option>
-        <option ${(options&&options.condOperator=="==")?"selected":""} value=\"==\">stacks are equal to</option>
-        <option ${(options&&options.condOperator==">=")?"selected":""} value=\">=\">stacks are greater than or equal to</option>
-        <option ${(options&&options.condOperator=="<=")?"selected":""} value=\"<=\">stacks are less than or equal to</option>
-        <option ${(options&&options.condOperator=="<")?"selected":""} value=\"<\">stacks are less than </option>
-        <option ${(options&&options.condOperator==">")?"selected":""} value=\">\">stacks are greater than</option>
-    </select>
-    <input class="CondInput" value=${(options&&options.condInput)?options.condInput:"0"} id=${"CondInput-"+(UUID)+"-"+CondIndex} type="number" style=${(options&&options.condOperator!=""&&options.condOperator!=undefined)?"display:inline-block;":"display:none;"}>
-    </input>
-    <select class="CondStackSelect" id=${"CondStackSelect-"+(UUID)+"-"+CondIndex} style=${(options&&options.condOperator!=""&&options.condOperator!=undefined)?"display:inline-block;":"display:none;"}>
-        <option ${(options&&options.condStack=="Jackpot")?"selected":""}>Jackpot</option>
-        <option ${(options&&options.condStack=="Schum")?"selected":""}>Schum</option>
-        <option ${(options&&options.condStack=="Sweet")?"selected":""}>Sweet</option>
-        <option ${(options&&options.condStack=="Bloodbath")?"selected":""}>Bloodbath</option>
-        <option ${(options&&options.condStack=="Fool")?"selected":""}>Fool</option>
-        <option ${(options&&options.condStack=="Booyah")?"selected":""}>Booyah</option>
-        <option ${(options&&options.condStack=="Pizza")?"selected":""}>Pizza</option>
-        <option ${(options&&options.condStack=="Die")?"selected":""}>Die</option>
-        <option ${(options&&options.condStack=="Deadweight")?"selected":""}>Deadweight</option>
-        <option ${(options&&options.condStack=="Sundae")?"selected":""}>Sundae</option>
-        <option ${(options&&options.condStack=="Power")?"selected":""}>Power</option>
-        <option ${(options&&options.condStack=="Streak")?"selected":""}>Streak</option>
-    </select>,
-    I will switch to
-    <select class="CondOutputSelect" id=${"CondOutputSelect-"+(UUID)+"-"+CondIndex}>
-        <option ${(options&&options.condOutput=="")?"selected":""}></option>
-        <option ${(options&&options.condOutput=="playing")?"selected":""}>playing</option>
-        <option ${(options&&options.condOutput=="scanning")?"selected":""}>scanning</option>
-        <option ${(options&&options.condOutput=="inactive")?"selected":""}>inactive</option>
-    </select>
-    <button class="CondCloseBtn">X</button>
-    `
-    let CondOutputSelect=NewCondBlock.querySelector(".CondOutputSelect")
-    let CondStackSelect=NewCondBlock.querySelector(".CondStackSelect")
-    let CondOperatorSelect=NewCondBlock.querySelector(".CondOperatorSelect")
-    let CondInput=NewCondBlock.querySelector(".CondInput")
-    CondOutputSelect.addEventListener("change",()=>{
-        window.electronAPI.SignalToMain("ChangeCondValue",UUID,CondIndex,"condOutput",CondOutputSelect.value)
-    })
-    CondStackSelect.addEventListener("change",()=>{
-        window.electronAPI.SignalToMain("ChangeCondValue",UUID,CondIndex,"condStack",CondStackSelect.value)
-    })
-    CondOperatorSelect.addEventListener("change",()=>{
-        (CondOperatorSelect.value!="")?CondInput.style.display="inline-block":CondInput.style.display="none";
-        (CondOperatorSelect.value!="")?CondStackSelect.style.display="inline-block":CondStackSelect.style.display="none";
-        console.log("CondIndex: ",CondIndex);
-        
-        window.electronAPI.SignalToMain("ChangeCondValue",UUID,CondIndex,"condOperator",CondOperatorSelect.value)
-    })
-    CondInput.addEventListener("change",()=>{
-        CondInput.valueAsNumber = Math.floor(CondInput.valueAsNumber)
-        window.electronAPI.SignalToMain("ChangeCondValue",UUID,CondIndex,"condInput",CondInput.valueAsNumber)
-    })
-    NewCondBlock.querySelector(".CondCloseBtn").addEventListener("click",()=>{
-        NewCondBlock.remove()
-        window.electronAPI.InvokeRendererToMain("CreateDestroyCond",false,UUID,CondIndex)
-    })
-    CondArrDiv.appendChild(NewCondBlock)
+    const Conditional = document.createElement("conditional-element");
+    Conditional.UUID = UUID;
+    Conditional.options=options;
+    Conditional.CondIndex=CondIndex;
+    CondArrDiv.appendChild(Conditional);
 }
 function RefreshTrackList(UUID,SoundsList,Tracks)
 {
@@ -285,7 +233,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
             <button id=${"AddCondBtn-"+(UUID)}>Add a conditional</button>
             <div id=${"CondArrDiv-"+(UUID)}></div>
         </div>
-        <div id=${"ending-form-"+UUID}>
+        <div class="w-100" id=${"ending-form-"+UUID}>
             <div id=${"add-tracks-div-"+UUID} class="flex w-100 flex-wrap">
                 <p class=\"TracksTitle\">TRACKS</p>
                 <button id=${"SoundsBtn-"+(UUID)}>ADD SFX</button>
@@ -294,6 +242,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         </div>
     `
     PriorityContainer.appendChild(NewPriorityBlockDiv)
+    
+    //#region element variables
     let pixelCoordInput = document.getElementById("customCoordInput-"+(UUID))
     let customColorInput = document.getElementById("customColorInput-"+(UUID))
     let heartbeatInput = document.getElementById("HeartbeatInput-"+(UUID))
@@ -322,7 +272,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     let StatusSpan=document.getElementById("StatusSpan-"+UUID)
     let endingform = document.getElementById("ending-form-"+UUID)
     let addtracksdiv = document.getElementById("add-tracks-div-"+UUID)
-
+    //#endregion
+    
     let trackoptions = document.createElement("track-options")
     trackoptions.UUID=UUID
     trackoptions.options=options
@@ -514,6 +465,17 @@ window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
                 console.log("Failed to find priority");
             }
         }
+    }
+})
+window.electronAPI.SignalToRenderer("ToggleMouseDebugTools",(Data)=>{
+    (Data)?MouseDebugDiv.style.display="inline-block":MouseDebugDiv.style.display="none"
+})
+window.electronAPI.SignalToRenderer("MouseDetails",(Data)=>{
+    MousePosSpan.innerText=`X:${Data.Pos.x} , Y:${Data.Pos.y}`
+    if(typeof Data.Color == "string"){
+        MouseColorSpan.innerText=Data.Color
+    }else{
+        MouseColorSpan.innerText=`R:${Data.Color[0]} , G:${Data.Color[1]} , B:${Data.Color[2]}`
     }
 })
 console.log("Flag final");

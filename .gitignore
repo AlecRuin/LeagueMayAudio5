@@ -96,3 +96,4 @@ test.txt
 log.txt
 *.wav
 *.mp3
+*.json
