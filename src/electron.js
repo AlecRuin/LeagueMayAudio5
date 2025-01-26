@@ -216,17 +216,19 @@ loadModules().then(()=>{
             label:"Toggle mouse debug tools",click:()=>{
               bIsMouseDebugTools=!bIsMouseDebugTools
               mainWindow.send("ToggleMouseDebugTools",bIsMouseDebugTools)
+              overlayWindow.send("ToggleMouseDebugTools",bIsMouseDebugTools)
               if(bIsMouseDebugTools){
                 if(MouseDebugThread)clearInterval(MouseDebugThread); 
                 MouseDebugThread=setInterval(() => {
                   let MousePos = robot.getMousePos()
                   let primarydisplay = screen.getPrimaryDisplay()
                   let flag=false
-                  if(MousePos.x>primarydisplay.bounds.width||MousePos.x<primarydisplay.x){
+                  if(MousePos.x>(primarydisplay.bounds.width*primarydisplay.scaleFactor)||MousePos.x<primarydisplay.x){
                     flag=true
-                  }else if(MousePos.y>primarydisplay.bounds.height||MousePos.y<primarydisplay.y){
+                  }else if(MousePos.y>(primarydisplay.bounds.height*primarydisplay.scaleFactor)||MousePos.y<primarydisplay.y){
                     flag=true
                   }
+                  overlayWindow.send("MouseDetails",{Pos:MousePos,Color:(flag)?"NaN/Out of bounds":hexToRGB(robot.getPixelColor(MousePos.x,MousePos.y))})
                   mainWindow.send("MouseDetails",{Pos:MousePos,Color:(flag)?"NaN/Out of bounds":hexToRGB(robot.getPixelColor(MousePos.x,MousePos.y))})
                 }, 50);
               }else{
@@ -364,12 +366,12 @@ loadModules().then(()=>{
       }
       Log(new Error(),"master script selected screen: ",MasterScript.getSelectedScreen());
       if(!MasterScript.getSelectedScreen())MasterScript.changeSelectedScreen(screen.getPrimaryDisplay())
-      if(!ScanningAbilityBorderLocations[4][""+MasterScript.getSelectedScreen().size.height]){
+      if(!ScanningAbilityBorderLocations[4][""+(MasterScript.getSelectedScreen().size.height/**MasterScript.getSelectedScreen().scaleFactor*/)]){
         Log(new Error(),"Screen isnt supported");
         Log(new Error(),"Blocks: ",MasterScript.Blocks);
         Log(new Error(),"MasterScript.getLeagueDir(): ",MasterScript.getLeagueDir());
         MasterScript.Blocks.forEach(async(element)=>{
-          if(element.scanLocation!="custom"){
+          if(element.spellSlot!=6){
             Log(new Error(),"Screen isnt supported and the user wants presets enabled");
             dialogBox=dialog.showMessageBox(null,{
               message: "Your monitor resolution isn't supported. Please change \"border start\" or \"border end\" to custom and manually insert the pixel coordinates you'd like this app to scan for.",
@@ -394,18 +396,19 @@ loadModules().then(()=>{
             return;
         }
       }
-      if(bIsTesting){
-        await MasterScript.updateScaleFactor()
-        for(let x=0;x<MasterScript.Blocks.length;x++){
-          await MasterScript.checkImageScan(MasterScript.Blocks[x],bIsTesting,x)
+      if(!dialogBox){
+        if(bIsTesting){
+          await MasterScript.updateScaleFactor()
+          for(let x=0;x<MasterScript.Blocks.length;x++){
+            await MasterScript.checkImageScan(MasterScript.Blocks[x],bIsTesting,x)
+          }
+          shell.openPath(path.join(app.getPath("userData"),"TestScans")).catch(err=>console.log(err))
+        }else{
+          MasterScript.startScanning(overlayWindow,mainWindow);
+          mainWindow.send("UpdatePlayPauseState",true)
+          //when finished, open dir
         }
-        shell.openPath(path.join(app.getPath("userData"),"TestScans")).catch(err=>console.log(err))
-      }else{
-        MasterScript.startScanning(overlayWindow,mainWindow);
-        mainWindow.send("UpdatePlayPauseState",true)
-        //when finished, open dir
       }
-      
     }
     Stop=function(){
       MasterScript.stopScanning();

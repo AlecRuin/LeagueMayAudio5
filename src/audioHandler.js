@@ -9,7 +9,7 @@ const {app} = require("electron");
 Number.prototype.clamp = function(min, max) {
     return Math.min(Math.max(this, min), max);
 };
-let mainWindow,Pixelmatch
+let mainWindow,Pixelmatch,visualizerWindow
 let Threshold=0.2
 //scale value for border start: 0.9555
 const ScanningAbilityBorderLocations = [
@@ -424,9 +424,7 @@ class Script
     {
         try {
             let data = fs.readFileSync(path.join(this.leagueDir,"Config","PersistedSettings.json"))
-            // this.scaleFactor = 1-JSON.parse(data).files[0].sections[5].settings[16].value * 0.0445
             this.scaleFactor=JSON.parse(data).files[0].sections[5].settings[16].value
-            // let TESTING = interpolate(ScanningAbilityBorderLocations[""+this.#selectedScreen.size.height][th])
             Log(new Error(),"scaleFactor: ",this.scaleFactor);
             for(let x=0;x<this.Blocks.length;x++)
             {
@@ -437,7 +435,7 @@ class Script
                             Log(new Error(),"Calculating coordinate for pixel-scan");
                             Log(new Error(),"scaleFactor: ",this.scaleFactor);
                             Log(new Error(),"Block.scanLocation: ",Block.scanLocation);
-                            let ScanDimensions = ScanningAbilityBorderLocations[Block.spellSlot][""+this.#selectedScreen.size.height][Block.scanLocation]
+                            let ScanDimensions = ScanningAbilityBorderLocations[Block.spellSlot][""+(this.#selectedScreen.size.height*this.#selectedScreen.scaleFactor)][Block.scanLocation]
                             let interpCoords = interpolate({x:ScanDimensions.MinX,y:ScanDimensions.MinY},{x:ScanDimensions.MaxX,y:ScanDimensions.MaxY},this.scaleFactor)
                             interpCoords={X:Math.floor(interpCoords.X),Y:Math.floor(interpCoords.Y)}
                             Log(new Error(),"Interpolation coords: ",interpCoords);
@@ -447,7 +445,7 @@ class Script
                             Log(new Error(),"Priority is buff pixel scan");
                             //buff pixel location
                             Block.targetLocation=[]
-                            let SelectedRegion =  ScanningPictureRegions[5][""+this.#selectedScreen.size.height]
+                            let SelectedRegion =  ScanningPictureRegions[5][""+(this.#selectedScreen.size.height*this.#selectedScreen.scaleFactor)]
                             console.log("Selected Region: ",SelectedRegion);
                             let X = Math.floor(SelectedRegion.XFunction(this.scaleFactor))
                             let Y = Math.floor(SelectedRegion.YFunction(this.scaleFactor))
@@ -468,7 +466,7 @@ class Script
                     }else if (Block.scanType=="image"){
                         if(Block.spellSlot<5){
                             Log(new Error(),"Calculating regions and buffers for image-scan");
-                            let ScanDimensions = ScanningPictureRegions[(Block.spellSlot)][""+this.#selectedScreen.size.height]
+                            let ScanDimensions = ScanningPictureRegions[(Block.spellSlot)][""+(this.#selectedScreen.size.height*this.#selectedScreen.scaleFactor)]
                             let interpCoords = interpolate({x:ScanDimensions.MinX,y:ScanDimensions.MinY},{x:ScanDimensions.MaxX,y:ScanDimensions.MaxY},this.scaleFactor)
                             interpCoords={X:Math.floor(interpCoords.X),Y:Math.floor(interpCoords.Y)}
                             let scaledDimension = Math.floor(Lerp(ScanDimensions.MinScale,ScanDimensions.MaxScale,this.scaleFactor))
@@ -482,7 +480,7 @@ class Script
                             Log(new Error(),"Priority is buff image scan");
                             //TODO buffs image scans here
                             Block.targetLocation=[]
-                            let SelectedRegion=ScanningPictureRegions[5][""+this.#selectedScreen.size.height]
+                            let SelectedRegion=ScanningPictureRegions[5][""+(this.#selectedScreen.size.height*this.#selectedScreen.scaleFactor)]
                             let X = Math.floor(SelectedRegion.XFunction(this.scaleFactor))
                             let Y = Math.floor(SelectedRegion.YFunction(this.scaleFactor))
                             let Scale = Math.floor(SelectedRegion.ScaleFunction(this.scaleFactor))
@@ -904,6 +902,7 @@ class Script
     async startScanning(window,MainWindow)
     {
         mainWindow=MainWindow;
+        visualizerWindow=window;
         Log(new Error(),"Begin scanning");
         if(mainWindow){
             let Blocks=[]
@@ -1011,6 +1010,7 @@ class Script
         }
         if (this.scanningThread)clearInterval(this.scanningThread);
         this.scanningThread=undefined
+        visualizerWindow.send("stop-visualizer")
     }
 
     /**
@@ -1549,9 +1549,6 @@ function PictureToBuffer(referenceImagePath){
     })
 }
 function getPixelColor({X, Y}) {
-    // console.log("this.selectedScreen: ",this.#selectedScreen);
-    // console.log("Mouse pos: ",robot.getMousePos());
-    
     const color = robot.getPixelColor(X, Y);
     let [r,g,b]=[parseInt(color.substring(0,2),16),parseInt(color.substring(2,4),16),parseInt(color.substring(4,6),16)];
     return [r,g,b];
@@ -1559,15 +1556,15 @@ function getPixelColor({X, Y}) {
 function isWithinConfidence(Color1,Color2,Confidence)
 {
     if (Color1.length !== Color2.length)throw new Error("Arrays must have the same length");
-    Log(new Error(),"Color1: ",Color1);
-    Log(new Error(),"Color2: ",Color2);
+    // Log(new Error(),"Color1: ",Color1);
+    // Log(new Error(),"Color2: ",Color2);
     let totalDifference = 0;
     const maxDifference = 255 * Color1.length;
     for (let i = 0; i < Color1.length; i++) {
         totalDifference += Math.abs(Color1[i] - Color2[i]);
     }
     const similarity = 1 - totalDifference / maxDifference;
-    Log(new Error(),"Similarity: ",similarity);
+    // Log(new Error(),"Similarity: ",similarity);
     return similarity >= Confidence;        
 }
 

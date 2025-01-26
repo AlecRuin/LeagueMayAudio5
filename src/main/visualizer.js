@@ -1,4 +1,10 @@
 let canvas = document.getElementById("visualizer")
+let MouseDebugDiv = document.querySelector(".mouse-tools")
+let MouseX = document.getElementById("MouseX")
+let MouseY = document.getElementById("MouseY")
+let MouseR = document.getElementById("MouseR")
+let MouseG = document.getElementById("MouseG")
+let MouseB = document.getElementById("MouseB")
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 const ctx = canvas.getContext("2d")
@@ -162,4 +168,20 @@ window.electronAPI.SignalToRenderer("inbound-settings",(Data)=>{
 })
 window.electronAPI.SignalToRenderer("stop-visualizer",()=>{
     ctx.clearRect(0, 0, canvas.width, canvas.height);  
+})
+window.electronAPI.SignalToRenderer("ToggleMouseDebugTools",(value)=>{
+    (value)?MouseDebugDiv.style.display="inline-block":MouseDebugDiv.style.display="none";
+})
+window.electronAPI.SignalToRenderer("MouseDetails",(Data)=>{
+    MouseX.innerText=Data.Pos.x
+    MouseY.innerText=Data.Pos.y
+    if(typeof Data.Color == "string"){
+        MouseR.innerText="N/A"
+        MouseG.innerText="N/A"
+        MouseB.innerText="N/A"
+    }else{
+        MouseR.innerText=Data.Color[0]
+        MouseG.innerText=Data.Color[1]
+        MouseB.innerText=Data.Color[2]
+    }
 })

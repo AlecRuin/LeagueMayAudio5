@@ -15,9 +15,24 @@
         #visualizer{
             background-color: rgba(255, 255, 255,0);
         }
+        p{
+            text-align: right;
+            padding-right: 20px;
+            color: wheat;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.85);
+            font-size: small;
+        }
+        .mouse-tools{
+            float: right;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
+    <div class="mouse-tools" style="display: none;">
+        <p>(<span id="MouseX"></span>,<span id="MouseY"></span>)</p>
+        <p>(<span id="MouseR"></span>,<span id="MouseG"></span>,<span id="MouseB"></span>)</p>
+    </div>
     <canvas id="visualizer">
 
     </canvas>
