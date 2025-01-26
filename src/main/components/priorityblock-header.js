@@ -39,6 +39,9 @@ class priorityblock_header extends CommonParentUtils{
             `
             this.div.querySelector(".close-btn").addEventListener("click",async()=>{
                 this.numOfPriorities = await window.electronAPI.InvokeRendererToMain("RemovePriority",this.UUID);
+                document.querySelectorAll(".column-display").forEach(element=>{
+                    (this.numOfPriorities>0)?element.style.display="inline-block":element.style.display="none"
+                })
                 const parentOfParent = this.parentElement?.parentElement;
                 if (parentOfParent) {
                     parentOfParent.remove(); 

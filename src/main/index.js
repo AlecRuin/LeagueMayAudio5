@@ -1,14 +1,14 @@
 async function LoadModules(){
     await import("./components/blocktype-starttype.js")
-    console.log("blocktype-start loaded");
+    Log(new Error(),"blocktype-start loaded");
     await import("./components/priorityblock-header.js")
-    console.log("priorityblock-header loaded");
+    Log(new Error(),"priorityblock-header loaded");
     await import("./components/trackoptions.js")
-    console.log("trackoptions loaded");
+    Log(new Error(),"trackoptions loaded");
     await import ("./components/conditional.js")
-    console.log("conditional loaded");
+    Log(new Error(),"conditional loaded");
     
-    console.log("All modules loaded");
+    Log(new Error(),"All modules loaded");
 }
 
 let WindowSelection = document.getElementById("DisplaySelect")
@@ -45,8 +45,25 @@ let PrioityAssets=[
 Number.prototype.clamp = function(min, max) {
     return Math.min(Math.max(this, min), max);
 };
+function ErrorParse(Error) {
+    return "%c[RENDERER]%c [" + Error.stack.split("\n")[1].split("/").pop().replace(/[()]/g, "") + "]";
+}
+function Log(error, ...msg) {
+    const formattedError = ErrorParse(error);
+    console.log(formattedError, "color: rgb(255, 112, 112);", "", ...msg);
+    window.electronAPI.SignalToMain("log", formattedError.replace(/%c/g,"")+":",...msg);
+}
+
+window.electronAPI.SignalToRenderer("log",(...args)=>{
+    let matches=args[0].match(/\[[^\]]*\]|[^[]+/g)
+    args[0] = "%c"+matches[0]+"%c"+matches[1]+matches[2];
+    args.splice(1,0,"color:rgb(138, 253, 255);");
+    args.splice(2,0,"");
+    console.log(...args);
+})
 async function CreateConditional(UUID,CondArrDiv,options)
 {
+    Log(new Error(),"Creating conditional for priority block ",UUID," with options provided: ",options);
     const CondIndex =(options&&options.UUID)?options.UUID:await window.electronAPI.InvokeRendererToMain("CreateDestroyCond",true,UUID)
     const Conditional = document.createElement("conditional-element");
     Conditional.UUID = UUID;
@@ -56,11 +73,13 @@ async function CreateConditional(UUID,CondArrDiv,options)
 }
 function RefreshTrackList(UUID,SoundsList,Tracks)
 {
+    Log(new Error(),"Refreshing track list for priority block ",UUID," with track list: ",Tracks);
+    Log(new Error(),"Destroying track list");
     while (SoundsList.firstChild) {
-        SoundsList.firstChild.remove()
-        //SoundsList.removeChild(SoundsList.firstChild);
+        SoundsList.firstChild.remove();
     }
     //recreate all element
+    Log(new Error(),"Regenerating track list");
     for(let x=0;x<Tracks.length;x++)
     {
         let NewSoundEntry = document.createElement("div")
@@ -69,22 +88,18 @@ function RefreshTrackList(UUID,SoundsList,Tracks)
             ${x+1}. ${Tracks[x].TrackURL.split("\\").pop()}
             <button id=${"DeleteTrackBtn-"+x}>X</button>
             </div>
-        `
-        SoundsList.appendChild(NewSoundEntry)
+        `;
+        SoundsList.appendChild(NewSoundEntry);
         document.getElementById("DeleteTrackBtn-"+x).addEventListener("click",async()=>{
-            console.log("UUID: ",UUID);
-            console.log("Tracks[x].UUID",Tracks[x].UUID);
-            
-            
-            let newTracks = await window.electronAPI.InvokeRendererToMain("RemoveTrack",UUID,Tracks[x].UUID)
-            console.log("New tracks: ",newTracks);
-            
+            Log(new Error(),"calling main to destroy track with uuid: ",Tracks[x].UUID);
+            let newTracks = await window.electronAPI.InvokeRendererToMain("RemoveTrack",UUID,Tracks[x].UUID);
             (newTracks)?RefreshTrackList(UUID,SoundsList,newTracks):RefreshTrackList(UUID,SoundsList,[]);
         })
     }
 }
 async function CreateOutput(UUID,OutputDiv,options)
 {
+    Log(new Error(),`Creating output for priority block ${UUID}. options parameter: `,options)
     const OutputUUID = (options&&options.UUID)?options.UUID:await window.electronAPI.InvokeRendererToMain("CreateDestroyOutput",true,UUID);
     // console.log("UUID: ",UUID);
     let NewOutput=document.createElement("li")
@@ -126,11 +141,13 @@ async function CreateOutput(UUID,OutputDiv,options)
     let OutputXDiv=NewOutput.querySelector(".OutputXDiv")
     
     OutputCloseBtn.addEventListener("click",async()=>{
+        Log(new Error(),`Destroying output with UUID ${OutputUUID} with priority block with UUID ${UUID}`)
         await window.electronAPI.InvokeRendererToMain("CreateDestroyOutput",false,UUID,OutputUUID)
         NewOutput.remove()
     })
     OutputSelect.addEventListener("change",()=>{
-        if(OutputSelect.value=="sub"||OutputSelect.value=="add"||OutputSelect.value=="set"){
+        Log(new Error(),`Changing output with UUID ${OutputUUID} within proririoty block with UUID ${UUID} to type ${OutputSelect.value}`)
+        if(["sub", "add", "set"].includes(OutputSelect.value)){
             OutputXDiv.style.display="inline-block"
             OutputStackSelect.style.display="inline-block"
         }else{
@@ -140,27 +157,23 @@ async function CreateOutput(UUID,OutputDiv,options)
         window.electronAPI.SignalToMain("ChangeOutputValue",UUID,OutputUUID,"cmd",OutputSelect.value)
     })
     OutputStackSelect.addEventListener("change",()=>{
+        Log(new Error(),`Changing output with UUID ${OutputUUID} within proririoty block with UUID ${UUID} to stack ${OutputStackSelect.value}`)
         window.electronAPI.SignalToMain("ChangeOutputValue",UUID,OutputUUID,"stack",OutputStackSelect.value)
     })
     OutputXInput.addEventListener("change",()=>{
         OutputXInput.valueAsNumber=Math.floor(OutputXInput.valueAsNumber)
+        Log(new Error(),`Changing output with UUID ${OutputUUID} within proririoty block with UUID ${UUID} to value ${OutputXInput.value}`)
         window.electronAPI.SignalToMain("ChangeOutputValue",UUID,OutputUUID,"value",OutputXInput.valueAsNumber)
     })
 }
 
-// WindowSelection.addEventListener("change",()=>{
-//     ResolutionDiv.innerHTML = NumOfDisplays[WindowSelection.selectedIndex].size.width+"x"+NumOfDisplays[WindowSelection.selectedIndex].size.height
-//     window.electronAPI.SignalToMain("ChangeDisplay",WindowSelection.selectedIndex)
-// })
-LeagueDir.addEventListener("click",async(e)=>{
-    const LeagueDirectory = await window.electronAPI.InvokeRendererToMain("OpenDirDialog")
-    if(LeagueDirectory)LeagueDirSpan.innerHTML=LeagueDirectory;
-})
 async function CreatePriorityBlock(UUID,options,optionalX)
 {
-    console.log("Options: ",options);
+    Log(new Error(),`Creating priority block with UUID ${UUID} and options payload: `,options);
     let numOfPriorities=await window.electronAPI.InvokeRendererToMain("GetNumOfPriorities");
+    Log(new Error(),`Number of priority blocks that exist currently: ${numOfPriorities}`)
     PlayBtn.style.display="inline-block"
+    document.querySelectorAll(".column-display").forEach(element=>element.style.display="inline-block")
     let NewPriorityBlockDiv = document.createElement("div")
     NewPriorityBlockDiv.classList.add("priority-block") 
     NewPriorityBlockDiv.id = UUID
@@ -245,7 +258,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     
     //#region element variables
     let pixelCoordInput = document.getElementById("customCoordInput-"+(UUID))
-    let customColorInput = document.getElementById("customColorInput-"+(UUID))
+    let customColorInput = document.getElementById("SpellCustomColorInput-"+(UUID))
     let heartbeatInput = document.getElementById("HeartbeatInput-"+(UUID))
     let SpellslotSelect = document.getElementById("SpellslotSelect-"+(UUID))
     let ScanLocationSelect = document.getElementById("ScanLocationSelect-"+(UUID))
@@ -288,7 +301,8 @@ async function CreatePriorityBlock(UUID,options,optionalX)
 
     let blocktype_starttype = document.createElement("blocktype-starttype")
     blocktype_starttype.options=options
-    blocktype_starttype.UUID=UUID
+    blocktype_starttype.UUID=UUID,
+    blocktype_starttype.condForm=condForm
     NewPriorityBlockDiv.insertBefore(blocktype_starttype,condForm)
 
     AddOutputBtn.addEventListener("click",()=>{
@@ -296,6 +310,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     })
     function SaveLocation()
     {
+        Log(new Error(),`Saving custom location values {${Math.floor(CustomLocationInputX.valueAsNumber)},${Math.floor(CustomLocationInputY.valueAsNumber)}} in priority block with UUID ${UUID}`)
         CustomLocationInputX.valueAsNumber=Math.floor(CustomLocationInputX.valueAsNumber)
         CustomLocationInputY.valueAsNumber=Math.floor(CustomLocationInputY.valueAsNumber)
         let LocationValues = [CustomLocationInputX.valueAsNumber,CustomLocationInputY.valueAsNumber]
@@ -304,38 +319,41 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     CustomLocationInputX.addEventListener("change",SaveLocation)
     CustomLocationInputY.addEventListener("change",SaveLocation)
     AddCondBtn.addEventListener("click",()=>{
-        //let UUID = window.electronAPI.SignalToMain("CreateDestroyCond",true,UUID)
         CreateConditional(UUID,CondArrDiv)
     })
     heartbeatInput.addEventListener("change",()=>{
+        Log(new Error(),`Setting global scanner heartbeat to ${heartbeatInput.valueAsNumber}`)
         window.electronAPI.SignalToMain("ChangeHeartbeat",heartbeatInput.valueAsNumber)
     })
     window.electronAPI.SignalToRenderer("UpdateHeartbeat",(input)=>{
+        Log(new Error(),`Recieving new global heartbeat value from Main: ${input}`)
         heartbeatInput.value = input
         savedHeartbeat=input
     })
     SpellCustomColorInput.addEventListener("change",()=>{
+        Log(new Error(),`Setting custom scan color value in priority block with UUID ${UUID} to ${SpellCustomColorInput.value}`)
         ScanCustomColorInput.value=SpellCustomColorInput.value
         window.electronAPI.SignalToMain("ChangeValue",UUID,"scanColorCustomRGB",SpellCustomColorInput.value) 
     })
     ScanCustomColorInput.addEventListener("change",()=>{
+        Log(new Error(),`Setting custom scan color value in priority block with UUID ${UUID} to ${ScanCustomColorInput.value}`)
         SpellCustomColorInput.value=ScanCustomColorInput.value
         window.electronAPI.SignalToMain("ChangeValue",UUID,"scanColorCustomRGB",ScanCustomColorInput.value) 
     })
     ScanImageBrowseBtn.addEventListener("click",async()=>{
+        Log(new Error(),`Asking Main process to open dialog box to pick TrackURL for priority block with UUID ${UUID}`)
         let Path = await window.electronAPI.InvokeRendererToMain("OpenImg",UUID)
+        Log(new Error(),`TrackURL recieved: ${Path}`)
         if(Path){
+            Log(new Error(),`Setting TrackURL to ${Path.split(/[/\\]/).pop()}`)
             ScanImageSpan.innerHTML=Path.split(/[/\\]/).pop()
         }else{
+            Log(new Error(),`TrackURL is empty. Resetting TrackURL to empty value`)
             ScanImageSpan.innerHTML=""
         }
     })
-    ScanTypeSelect.addEventListener("change",()=>{
-        // ScanCustomColorInput
-        // ScanImageSpan 
-        // ScanImageBrowseBtn 
-        console.log("ScanTypeSelect.value: ",ScanTypeSelect.value);
-        
+    ScanTypeSelect.addEventListener("change",()=>{ 
+        Log(new Error(),`Setting scan type in priority block with UUID ${UUID} to ${ScanTypeSelect.value}`);
         if(ScanTypeSelect.value=="image"){
             ScanImageBrowseBtn.style.display="inline-block"
             ScanImageSpan.style.display="inline-block"
@@ -348,14 +366,12 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         window.electronAPI.SignalToMain("ChangeValue",UUID,"scanType",ScanTypeSelect.value)
     })
     SpellslotSelect.addEventListener("change",()=>{
+        Log(new Error(),`Setting spell slot within priority block with UUID ${UUID} to ${SpellslotSelect.value}`)
         if(SpellslotSelect.value==5&&SpellslotSelect.value=="pixel"){
             ScanCustomColorInput.style.display="inline-block"
         }else{
             ScanCustomColorInput.style.display="none"
         }
-        // // console.log("ScanOptionBorder: ",{ScanOptionBorder});
-        // console.log("SpellslotSelect.value: ",SpellslotSelect.value);
-        // console.log("ScanTypeSelect.value: ",ScanTypeSelect.value);
         (ScanTypeSelect.value=="pixel"&&SpellslotSelect.value>=5)?ScanCustomColorInput.style.display="inline-block":ScanCustomColorInput.style.display="none";
         (SpellslotSelect.value<5&&ScanTypeSelect.value=="pixel")?SpellOptionsSpan.style.display="inline-block":SpellOptionsSpan.style.display="none"
         ScanOptionBorder.text=`${(SpellslotSelect.value<5)?"'s Border ":""}for a pixel`
@@ -364,12 +380,13 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         window.electronAPI.SignalToMain("ChangeValue",UUID,"spellSlot",+SpellslotSelect.value)
     })
     ScanLocationSelect.addEventListener("change",()=>{
+        Log(new Error(),`setting scan location for priority block with UUID ${UUID} to ${ScanLocationSelect.value}`)
         //Assertation
-        ScanLocationSelect.value = ["border-start", "border-end", "custom"].includes(ScanLocationSelect.value) ? ScanLocationSelect.value : "border-start";
-        (ScanLocationSelect.value=="custom")?pixelCoordInput.style.display="inline-block":pixelCoordInput.style.display="none";
+        ScanLocationSelect.value = ["border-start", "border-end", "border-half-way"].includes(ScanLocationSelect.value) ? ScanLocationSelect.value : "border-start";
         window.electronAPI.SignalToMain("ChangeValue",UUID,"scanLocation",ScanLocationSelect.value);
     })
     ScanColorSelect.addEventListener("change",()=>{
+        Log(new Error(),`setting scan color for priority block with UUID ${UUID} to ${ScanColorSelect.value}`)
         //Assertation
         ScanColorSelect.value = ["yellow","gold", "silver","glimmer", "custom"].includes(ScanColorSelect.value) ? ScanColorSelect.value : "yellow";
         (ScanColorSelect.value=="custom")?customColorInput.style.display="inline-block":customColorInput.style.display="none"
@@ -377,14 +394,17 @@ async function CreatePriorityBlock(UUID,options,optionalX)
         window.electronAPI.SignalToMain("ChangeValue",UUID,"scanColorType",ScanColorSelect.value);
     })
     ConfidenceInput.addEventListener("change",()=>{
+        Log(new Error(),`setting confidence for priority block with UUID ${UUID} to ${ConfidenceInput.value}`)
         //Assertation
         ConfidenceInput.valueAsNumber = ConfidenceInput.valueAsNumber.clamp(0,1)
         //Confirmation
         window.electronAPI.SignalToMain("ChangeValue",UUID,"confidence",ConfidenceInput.valueAsNumber)
     })
     SoundsBtn.addEventListener("click",async()=>{
+        Log(new Error(),`Asking Main process to open dialog box to pick track`)
         //pub the track, and get a return of them and get num of tracks
         const Tracks = await window.electronAPI.InvokeRendererToMain("OpenTrack",UUID)
+        Log(new Error(),`Track selected:`,Tracks)
         //delete all previous elements
         if (Tracks) RefreshTrackList(UUID,SoundsList,Tracks)
     })
@@ -404,8 +424,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
 }
 
 window.electronAPI.SignalToRenderer("UpdateDisplaySelection",(numOfDisplays)=>{
-    console.log("Num of displays: ",numOfDisplays);
-    
+    Log(new Error(),"Updating the display selection. NumOfDisplays: ",numOfDisplays);    
     NumOfDisplays=numOfDisplays
     for(let x=0;x<WindowSelection.options.length;x++)
     {
@@ -422,8 +441,9 @@ window.electronAPI.SignalToRenderer("UpdateDisplaySelection",(numOfDisplays)=>{
     ResolutionDiv.innerHTML = numOfDisplays[0].size.width+"x"+numOfDisplays[0].size.height
 })
 window.electronAPI.SignalToRenderer("UpdateAll",(Data)=>{
+    Log(new Error(),"Updating everything with this as the payload: ",Data)
     if(Data&&Data.heartbeat)savedHeartbeat=Data.heartbeat;
-    if(Data&&Data.leagueDir)LeagueDirSpan.innerHTML=Data.leagueDir;
+    (Data&&Data.leagueDir)?LeagueDirSpan.innerHTML=Data.leagueDir:LeagueDirSpan.innerHTML=""
     if(PriorityContainer.children.length>0)
     {
         Array.from(PriorityContainer.children).forEach((element)=>{
@@ -440,20 +460,10 @@ window.electronAPI.SignalToRenderer("UpdateAll",(Data)=>{
         }
     }
 })
-
 window.electronAPI.SignalToRenderer("UpdatePlayPauseState",(Value)=>{
+    Log(new Error(),"Are the scanners on? ",Value)
     PlayBtn.innerHTML = `${(Value)?"🟥":"▶️"}`
 })
-//window.electronAPI.SignalToRenderer("UpdateLeagueDir")
-createPriorityBtn.addEventListener("click",async(e)=>{
-    let UUID = await window.electronAPI.InvokeRendererToMain("CreatePriority");
-    //create a visual priority block
-    CreatePriorityBlock(UUID)
-});
-
-PlayBtn.addEventListener("click",()=>{
-    window.electronAPI.SignalToMain("PlayPauseScan");
-});
 window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
     if(Data&&Data.Blocks){
         for(let x=0;x<Data.Blocks.length;x++){
@@ -462,12 +472,13 @@ window.electronAPI.SignalToRenderer("UpdateValues",(Data)=>{
             if(StatusSpan){
                 StatusSpan.innerText=`Status: ${emojis[Data.Blocks[x].status]}${Data.Blocks[x].status}`
             }else{
-                console.log("Failed to find priority");
+                Log(new Error(),"Failed to find priority");
             }
         }
     }
 })
 window.electronAPI.SignalToRenderer("ToggleMouseDebugTools",(Data)=>{
+    Log(new Error(),`Turning mouse debugger ${(Data)?"on":"off"}`);
     (Data)?MouseDebugDiv.style.display="inline-block":MouseDebugDiv.style.display="none"
 })
 window.electronAPI.SignalToRenderer("MouseDetails",(Data)=>{
@@ -478,9 +489,22 @@ window.electronAPI.SignalToRenderer("MouseDetails",(Data)=>{
         MouseColorSpan.innerText=`R:${Data.Color[0]} , G:${Data.Color[1]} , B:${Data.Color[2]}`
     }
 })
-console.log("Flag final");
-LoadModules()
-
+createPriorityBtn.addEventListener("click",async(e)=>{
+    Log(new Error(),"Creating new priority block")
+    let UUID = await window.electronAPI.InvokeRendererToMain("CreatePriority");
+    CreatePriorityBlock(UUID)
+});
+PlayBtn.addEventListener("click",()=>{
+    Log(new Error(),"Play/Pause button clicked. Sending signal to Main process")
+    window.electronAPI.SignalToMain("PlayPauseScan");
+});
+LeagueDir.addEventListener("click",async(e)=>{
+    Log(new Error(),"Asking Main process for dialog box to select League of Legends installation directory")
+    const LeagueDirectory = await window.electronAPI.InvokeRendererToMain("OpenDirDialog")
+    if(LeagueDirectory)LeagueDirSpan.innerHTML=LeagueDirectory;
+})
 let variables_table=document.createElement("variables-table")
 variables_table.UUID="none"
 document.querySelector(".body").insertBefore(variables_table,document.querySelector(".body-container"))
+Log(new Error(),"Loading all modules");
+LoadModules()

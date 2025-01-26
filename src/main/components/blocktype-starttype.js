@@ -1,16 +1,16 @@
 let className= "blocktype-starttype"
 import CommonParentUtils from "./parentUtils.js";
+import { Log } from "./utils.js";
 class BlockType_Start extends CommonParentUtils{
     constructor(){
         super();
-        // this.attachShadow({mode:"open"})
-        // this.addStyles()
         this.div = document.createElement("div")
         this.shadowRoot.appendChild(this.div)
     }
     connectedCallback(){
         try {
-            if(!this.UUID)throw new Error("missing UUID")
+            if(!this.UUID)throw new Error("missing UUID");
+            if(!this.condForm)throw new Error("missing condForm");
             super.connectedCallback(className,this.UUID)
             this.div.innerHTML=`
                 I am a 
@@ -29,14 +29,17 @@ class BlockType_Start extends CommonParentUtils{
             let StartSelect = this.div.querySelector(".StartSelect")
             let BlockTypeSelect = this.div.querySelector(".BlockTypeSelect")
             StartSelect.addEventListener("change",()=>{
+                Log(new Error(),`Setting priority block with UUID ${this.UUID} starting value to `,StartSelect.value)
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"startStatus",StartSelect.value)
             })
             BlockTypeSelect.addEventListener("change",()=>{
-                // (BlockTypeSelect.value=="image-scan")?condForm.style.display="inline-block":condForm.style.display="none";
-                this.dispatchEvent(new CustomEvent("toggle-display",{detail:{UUID:this.UUID,channel:"conditional-form",display:(BlockTypeSelect.value=="image-scan")?"inline-block":"none"}}))   
+                Log(new Error(),"Setting scanner type of priority block with UUID ",this.UUID," to ",BlockTypeSelect.value)
+                // this.dispatchEvent(new CustomEvent("toggle-display",{detail:{UUID:this.UUID,channel:"conditional-form",display:(BlockTypeSelect.value=="image-scan")?"inline-block":"none"}}))   
+                this.condForm.style.display=(BlockTypeSelect.value=="image-scan")?"inline-block":"none"
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"blockType",BlockTypeSelect.value)
             })
         } catch (error) {
+            Log(new Error(),error)
             console.error("Error: ",error);
         }
     }

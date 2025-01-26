@@ -1,5 +1,6 @@
 import CommonParentUtils from "./parentUtils.js";
 let className = "conditional-element"
+import { Log } from "./utils.js";
 class Conditional extends CommonParentUtils{
     constructor(){
         super()
@@ -9,7 +10,7 @@ class Conditional extends CommonParentUtils{
     connectedCallback(){
         try {
             if(!this.UUID)throw new Error("missing UUID");
-            if(!this.CondIndex)throw new Error("missing CondIndex")
+            if(!this.CondIndex)throw new Error("missing CondIndex");
             super.connectedCallback(className,this.UUID)
             this.div.innerHTML=`
             If
@@ -49,30 +50,34 @@ class Conditional extends CommonParentUtils{
             let CondOutputSelect=this.div.querySelector(".CondOutputSelect")
             let CondStackSelect=this.div.querySelector(".CondStackSelect")
             let CondOperatorSelect=this.div.querySelector(".CondOperatorSelect")
-            let CondInput=this.div.querySelector(".CondInput")
+            let CondInput=this.div.querySelector(".CondInput");
             CondOutputSelect.addEventListener("change",()=>{
+                Log(new Error(),"Setting condition output for condition ",this.CondIndex," inside priority block with UUID ",this.UUID," to ",CondOutputSelect.value);
                 window.electronAPI.SignalToMain("ChangeCondValue",this.UUID,this.CondIndex,"condOutput",CondOutputSelect.value)
             })
             CondStackSelect.addEventListener("change",()=>{
+                Log(new Error(),"Setting condition stack for condition ",this.CondIndex," inside priority block with UUID ",this.UUID," to ",CondStackSelect.value);
                 window.electronAPI.SignalToMain("ChangeCondValue",this.UUID,this.CondIndex,"condStack",CondStackSelect.value)
             })
             CondOperatorSelect.addEventListener("change",()=>{
+                Log(new Error(),"Setting condition operator for condition ",this.CondIndex," inside priority block with UUID ",this.UUID," to ",CondOperatorSelect.value);
                 (CondOperatorSelect.value!="")?CondInput.style.display="inline-block":CondInput.style.display="none";
                 (CondOperatorSelect.value!="")?CondStackSelect.style.display="inline-block":CondStackSelect.style.display="none";
-                console.log("CondIndex: ",this.CondIndex);
-                
                 window.electronAPI.SignalToMain("ChangeCondValue",this.UUID,this.CondIndex,"condOperator",CondOperatorSelect.value)
             })
             CondInput.addEventListener("change",()=>{
-                CondInput.valueAsNumber = Math.floor(CondInput.valueAsNumber)
+                Log(new Error(),"Setting condition input value for condition ",this.CondIndex," inside priority block with UUID ",this.UUID," to ",CondInput.value);
+                CondInput.valueAsNumber = Math.floor(CondInput.valueAsNumber);
                 window.electronAPI.SignalToMain("ChangeCondValue",this.UUID,this.CondIndex,"condInput",CondInput.valueAsNumber)
             })
             this.div.querySelector(".CondCloseBtn").addEventListener("click",()=>{
+                Log(new Error(),"Destroy condition with UUID ",this.CondIndex," inside priority block with UUID ",this.UUID);
                 window.electronAPI.InvokeRendererToMain("CreateDestroyCond",false,this.UUID,this.CondIndex)
                 this.div.remove()
             })
         } catch (error) {
-            console.error("Error: ",error);
+            Log(new Error(),error)
+            console.error(error);
         }
     }
 }

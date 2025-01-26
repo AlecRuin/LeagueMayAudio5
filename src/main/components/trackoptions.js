@@ -1,5 +1,6 @@
 import CommonParentUtils from "./parentUtils.js";
 let className = "track-options"
+import { Log } from "./utils.js";
 class TrackOptions extends CommonParentUtils{
     constructor(){
         super()
@@ -10,8 +11,7 @@ class TrackOptions extends CommonParentUtils{
     connectedCallback(){
         try {
             if(!this.UUID)throw new Error("missing UUID");
-            // if(!this.this.options)throw new Error("missing this.options");
-            super.connectedCallback(className,this.UUID)
+            super.connectedCallback(className,this.UUID);
             this.div.innerHTML=`
                 <div>
                     I 
@@ -82,59 +82,70 @@ class TrackOptions extends CommonParentUtils{
             let FadeOutInputDiv = this.div.querySelector(".FadeOutInputDiv")
             let IsRandomSelect = this.div.querySelector(".IsRandomSelect")
             VisFillPatternBtn.addEventListener("click",async()=>{
+                Log(new Error(), "asking Main process for dialog box to select visualizer fill pattern url for priority block with UUID ",this.UUID);
                 let Path = await window.electronAPI.InvokeRendererToMain("OpenFill",this.UUID)
+                Log(new Error(),"given url: ",Path,", for priority block with UUID ",this.UUID);
                 if(Path){
                     VisFillPatternSpan.style.display="inline-block"
-                    console.log("Path: ",Path);
-                    
                     VisFillPatternSpan.innerText=Path.split(/[/\\]/).pop();
                 }else{
                     VisFillPatternSpan.style.display="none"
                 }
             })
             VisFillPatternCloseBtn.addEventListener("click",()=>{
+                Log(new Error(),"removing visualizer fill image from priority block with UUID ",this.UUID);
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"VisualizerFillPatternPath","")
                 VisFillPatternSpan.style.display="none"
             })
             FillVisInput.addEventListener("change",()=>{
-                (FillVisInput.checked)?VisColorSpan.style.display="inline-block":VisColorSpan.style.display="none"
+                Log(new Error(),"setting visualizer fill enabled for priority block with UUID ",this.UUID, " to ", FillVisInput.checked);
+                (FillVisInput.checked)?VisColorSpan.style.display="inline-block":VisColorSpan.style.display="none";
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"bFillVisualizer",FillVisInput.checked)
             })
             FillVisColorInput.addEventListener("change",()=>{
+                Log(new Error(),"setting visualizer fill color for priority block with UUID ",this.UUID, " to ", FillVisColorInput.value);
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"VisualizerFillColor",FillVisColorInput.value)
             })
             VisLineColorInput.addEventListener("change",()=>{
+                Log(new Error(),"setting visualizer line color for priority block with UUID ",this.UUID, " to ", VisLineColorInput.value);
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"VisualizerLineColor",VisLineColorInput.value)
             })
             UseVisualizerSelect.addEventListener("change",()=>{
                 let value = UseVisualizerSelect.value ==="true";
+                Log(new Error(),"setting visualizer enabled for priority block with UUID ",this.UUID, " to ",value);
                 (value)?VisualizerOptionsDiv.style.display="inline-block":VisualizerOptionsDiv.style.display="none";
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"bUseVisualizer",value)
             })
             FadeOutInput.addEventListener("change",()=>{
-                FadeOutInput.valueAsNumber=Math.floor(FadeOutInput.valueAsNumber)
+                Log(new Error(),"setting track fade out timer for priority block with UUID ",this.UUID, " to ",Math.abs(Math.floor(FadeOutInput.valueAsNumber)));
+                FadeOutInput.valueAsNumber=Math.abs(Math.floor(FadeOutInput.valueAsNumber))
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"FadeOutDuration",FadeOutInput.valueAsNumber)
             })
             FadeInInput.addEventListener("change",()=>{
-                FadeInInput.valueAsNumber=Math.floor(FadeInInput.valueAsNumber)
+                Log(new Error(),"setting track fade in timer for priority block with UUID ",this.UUID, " to ",Math.abs(Math.floor(FadeInInput.valueAsNumber)));
+                FadeInInput.valueAsNumber=Math.abs(Math.floor(FadeInInput.valueAsNumber))
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"FadeInDuration",FadeInInput.valueAsNumber)
             })
             FadeInSelect.addEventListener("change",()=>{
                 let value = FadeInSelect.value ==="true";
+                Log(new Error(),"setting track fade in enabled for priority block with UUID ",this.UUID, " to ",value);
                 (value)?FadeInInputDiv.style.display="inline-block":FadeInInputDiv.style.display="none";
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"bIsFadeIn",value)
             }) 
             FadeOutSelect.addEventListener("change",()=>{
                 let value = FadeOutSelect.value ==="true";
+                Log(new Error(),"setting track fade out enabled for priority block with UUID ",this.UUID, " to ",value);
                 (value)?FadeOutInputDiv.style.display="inline-block":FadeOutInputDiv.style.display="none";
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"bIsFadeOut",value)
             })
             IsRandomSelect.addEventListener("change",()=>{
                 let value = IsRandomSelect.value ==="true";
+                Log(new Error(),"setting random track select for priority block with UUID ",this.UUID, " to ",value);
                 window.electronAPI.SignalToMain("ChangeValue",this.UUID,"bIsRandom",value)
             })
         } catch (error) {
-            console.error("Error: ",error);
+            Log(new Error(),error)
+            console.error(error);
         }
     }
 }

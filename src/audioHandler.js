@@ -9,7 +9,6 @@ const {app} = require("electron");
 Number.prototype.clamp = function(min, max) {
     return Math.min(Math.max(this, min), max);
 };
-let bIsVerboseLogging=false
 let mainWindow,Pixelmatch
 let Threshold=0.2
 //scale value for border start: 0.9555
@@ -108,19 +107,131 @@ const ScanningAbilityBorderLocations = [
 const ScanningPictureRegions=[
     {
         //Passive
+        "720":{
+            MinX:453,
+            MaxX:517,
+            MinY:632,
+            MaxY:662,
+            MaxScale:28,
+            MinScale:18
+        },
+        "1080":{
+            MaxX:775,
+            MinX:681,
+            MaxY:993,
+            MinY:950,
+            MaxScale:41,
+            MinScale:28
+        },
+        "1440":{
+            MinX:908,
+            MinY:1266,
+            MaxX:1034,
+            MaxY:1325,
+            MinScale:34,
+            MaxScale:54
+        }
     },{
         //Q
+        "720":{
+            MaxScale:38,
+            MinX:487,
+            MaxX:539,
+            MinY:632,
+            MaxY:662,
+            MinScale:24
+        },
+        "1080":{
+            MinX:731,
+            MaxX:808,
+            MinY:949,
+            MaxY:993,
+            MinScale:37,
+            MaxScale:56
+        },
+        "1440":{
+            MinX:975,
+            MinY:1266,
+            MaxX:1079,
+            MaxY:1325,
+            MaxScale:74,
+            MinScale:48
+        }
     },{
         //W
+        "720":{
+            MinX:531,
+            MaxX:568,
+            MinY:632,
+            MaxY:662,
+            MinScale:24,
+            MaxScale:38
+        },
+        "1080":{
+            MinX:798,
+            MaxX:852,
+            MaxY:993,
+            MinY:949,
+            MaxScale:55,
+            MinScale:37
+        },
+        "1440":{
+            MinY:1226,
+            MinX:1064,
+            MaxX:1137,
+            MaxY:1325,
+            MinScale:49,
+            MaxScale:73
+        }
     },{
         //E
+        "720":{
+            MinX:576,
+            MaxX:589,
+            MinY:632,
+            MaxY:662,
+            MaxScale:37,
+            MinScale:24
+        },
+        "1080":{
+            MinX:864,
+            MinY:949,
+            MaxX:896,
+            MaxY:993,
+            MinScale:37,
+            MaxScale:56
+        },
+        "1440":{
+            MinX:1153,
+            MinY:1266,
+            MaxX:1196,
+            MaxY:1325,
+            MinScale:48,
+            MaxScale:73
+        }
     },{
         //R
+        "720":{
+            MinX:620,
+            MaxX:627,
+            MinY:632,
+            MaxY:662,
+            Scale:24,
+            Scale:38
+        },
+        "1080":{
+            MaxScale:55,
+            MinX:931,
+            MaxX:940,
+            MaxY:993,
+            MinY:949,
+            MinScale:37
+        },
         "1440":{
             //48x48, 1255 1325
-            //75x75 1241 1265
+            //75x75 1241 1266
             MinX:1241,
-            MinY:1265,
+            MinY:1266,
             MinScale:48,
             MaxX:1255,
             MaxY:1325,
@@ -128,17 +239,55 @@ const ScanningPictureRegions=[
         }
     },{
         //Buffs
+        "720":{
+            /** 0 501,634 17x17 
+             * 25 483,623 19x19
+             * 50 466,612 21x21
+             * 75 448,602 23x23
+             * 100 430,591 25x25
+             */
+            XFunction:(scaleFactor)=>{
+                return -0.708(scaleFactor*100)+501
+            },
+            YFunction:(scaleFactor)=>{
+                return -0.428*(scaleFactor*100)+633.8
+            },
+            ScaleFunction:(scaleFactor)=>{
+                return 0.08*(scaleFactor*100)+17
+            },
+            Settings:{
+                HeightPadding:1,
+                WidthPadding:1,
+                width:6,
+                height:3
+            }
+        },
         "1080":{
             //AT 0 scale: 23x23, starts at 753,897, padding 4px
             //AT 1 scale: 36x36, starts at 646,807, padding 4px
+            /**0 753,951 23x23
+             * 25 726,936 26x26
+             * 50 700,920 29x29
+             * 75 673,903 32x32
+             * 100 646,887 36x36
+             */ 
+            XFunction:(scaleFactor)=>{
+                return -1.068*(scaleFactor*100)+753
+            },
+            YFunction:(scaleFactor)=>{
+                return -0.644*(scaleFactor*100)+951.6
+            },
+            ScaleFunction:(scaleFactor)=>{
+                return 0.128*(scaleFactor*100)+22.8
+            },
+            Settings:{
+                HeightPadding:3,
+                WidthPadding:3,
+                width:6,
+                height:3
+            }
         },
         "1440":{
-            MinX:862,
-            MinY:1079,
-            MinScale:31,
-            MaxX:1004,
-            MaxY:1201,
-            MaxScale:48,
             XFunction:(scaleFactor)=>{
                 return -1.42*(scaleFactor*100)+1003.8
             },
@@ -147,7 +296,7 @@ const ScanningPictureRegions=[
             },
             ScaleFunction:(scaleFactor)=>{
                 return 0.168*(scaleFactor*100)+31.4
-            }
+            },
             //AT 0 SCALE: 31x31, starts at 1004,1201, padding 4px. 
             //AT 1 SCALE: 48x48, starts at 862,1079, padding 4px, 6x3 cells
             //0 1004, 1271, 31x31
@@ -156,17 +305,24 @@ const ScanningPictureRegions=[
             //.75 897,1206 44x44
             //1 862,1183 48x48
             //.74 899,1206, 44x44
+            /**For each pair (Xi,Yi)
+             * calculate (Xi-AvgX)(Yi-AvgY)+
+             * square (Xi-AvgX)+
+             * Covariance/Variace
+             * b=AvgY-mAvgX
+             */
+            Settings:{
+                HeightPadding:4,
+                WidthPadding:4,
+                width:6,
+                height:3
+            }
         }
-    },
-    {
-        padding:4,
-        width:6,
-        height:3
     }
 ]
 const ColorPresets ={
     "yellow":[255,251,189],
-    "gold":[206,166,101],
+    "gold":[170,140,81],
     "silver":[104,106,104],
     "glimmer":[240,240,240]
 }
@@ -235,7 +391,7 @@ class Script
         this.leagueDir=LeagueDir
         let data = fs.readFileSync(path.join(this.leagueDir,"Config","PersistedSettings.json"))
         this.scaleFactor=JSON.parse(data).files[0].sections[5].settings[16].value
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"scaleFactor: ",this.scaleFactor);
+        Log(new Error(),"scaleFactor: ",this.scaleFactor);
         fs.watchFile(path.join(this.leagueDir,"Config","PersistedSettings.json"),()=>{this.updateScaleFactor()})
     }
     /**
@@ -259,8 +415,8 @@ class Script
      */
     removeBlock(UUID)
     {
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"UUID: ",UUID);
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"this.blocks: ",this.Blocks);
+        Log(new Error(),"UUID: ",UUID);
+        Log(new Error(),"this.blocks: ",this.Blocks);
         this.Blocks=this.Blocks.filter(Block=>Block.UUID!==UUID)
     }
 
@@ -271,45 +427,47 @@ class Script
             // this.scaleFactor = 1-JSON.parse(data).files[0].sections[5].settings[16].value * 0.0445
             this.scaleFactor=JSON.parse(data).files[0].sections[5].settings[16].value
             // let TESTING = interpolate(ScanningAbilityBorderLocations[""+this.#selectedScreen.size.height][th])
-            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"scaleFactor: ",this.scaleFactor);
+            Log(new Error(),"scaleFactor: ",this.scaleFactor);
             for(let x=0;x<this.Blocks.length;x++)
             {
                 let Block = this.Blocks[x]
                 if (Block.blockType=="image-scan"){
                     if(Block.scanType=="pixel"){
                         if(Block.spellSlot<5){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Calculating coordinate for pixel-scan");
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"scaleFactor: ",this.scaleFactor);
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.scanLocation: ",Block.scanLocation);
+                            Log(new Error(),"Calculating coordinate for pixel-scan");
+                            Log(new Error(),"scaleFactor: ",this.scaleFactor);
+                            Log(new Error(),"Block.scanLocation: ",Block.scanLocation);
                             let ScanDimensions = ScanningAbilityBorderLocations[Block.spellSlot][""+this.#selectedScreen.size.height][Block.scanLocation]
                             let interpCoords = interpolate({x:ScanDimensions.MinX,y:ScanDimensions.MinY},{x:ScanDimensions.MaxX,y:ScanDimensions.MaxY},this.scaleFactor)
                             interpCoords={X:Math.floor(interpCoords.X),Y:Math.floor(interpCoords.Y)}
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Interpolation coords: ",interpCoords);
+                            Log(new Error(),"Interpolation coords: ",interpCoords);
                             Block.targetLocation=interpCoords
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.targetLocation: ",Block.targetLocation);
+                            Log(new Error(),"Block.targetLocation: ",Block.targetLocation);
                         }else if(Block.spellSlot==5){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Priority is buff pixel scan");
-                            //do buff pixel location
+                            Log(new Error(),"Priority is buff pixel scan");
+                            //buff pixel location
                             Block.targetLocation=[]
                             let SelectedRegion =  ScanningPictureRegions[5][""+this.#selectedScreen.size.height]
                             console.log("Selected Region: ",SelectedRegion);
                             let X = Math.floor(SelectedRegion.XFunction(this.scaleFactor))
                             let Y = Math.floor(SelectedRegion.YFunction(this.scaleFactor))
                             let Scale = Math.floor(SelectedRegion.ScaleFunction(this.scaleFactor))
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"X,Y,Scale: ",X,Y,Scale);
-                            for(let y=0;y<ScanningPictureRegions[6].width;y++){
-                                for(let z=0;z<ScanningPictureRegions[6].height;z++){
-                                    Block.targetLocation.push({X:Math.floor(X+(ScanningPictureRegions[6].padding*y+Scale*y)+Math.floor(Scale/1.5))+1,Y:Math.floor(Y-(ScanningPictureRegions[6].padding*z+Scale*z)+Math.floor(Scale/2.7))-1})
+                            Log(new Error(),"X,Y,Scale: ",X,Y,Scale);
+                            for(let y=0;y<SelectedRegion.Settings.width;y++){
+                                for(let z=0;z<SelectedRegion.Settings.height;z++){
+                                    Block.targetLocation.push({X:Math.floor(X+(SelectedRegion.Settings.WidthPadding*y+Scale*y)+Math.floor(Scale/1.5))+1,Y:Math.floor(Y-(SelectedRegion.Settings.HieghtPadding*z+Scale*z)+Math.floor(Scale/2.7))-1})
                                 }
                             }
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.TargetLocation: ",Block.targetLocation);
+                            Log(new Error(),"Block.TargetLocation: ",Block.targetLocation);
                         }else if(Block.spellSlot==6){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Priority is custom location pixel scan");
-                            //do custom pixel location
+                            Log(new Error(),"Priority is custom location pixel scan");
+                            //custom pixel location
+                            Block.targetLocation={X:Block.scanCustomLocation[0],Y:Block.scanCustomLocation[1]}
+                            Log(new Error(),"Block.targetLocation: ",Block.targetLocation);
                         }else{throw new Error("invalid Block.spellSlot")}
                     }else if (Block.scanType=="image"){
                         if(Block.spellSlot<5){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Calculating regions and buffers for image-scan");
+                            Log(new Error(),"Calculating regions and buffers for image-scan");
                             let ScanDimensions = ScanningPictureRegions[(Block.spellSlot)][""+this.#selectedScreen.size.height]
                             let interpCoords = interpolate({x:ScanDimensions.MinX,y:ScanDimensions.MinY},{x:ScanDimensions.MaxX,y:ScanDimensions.MaxY},this.scaleFactor)
                             interpCoords={X:Math.floor(interpCoords.X),Y:Math.floor(interpCoords.Y)}
@@ -317,15 +475,38 @@ class Script
                             let Result = await PictureToBuffer(Block.ScanImagePath)
                             Block.ScanImageBuffer = Result
                             Block.targetLocation=interpCoords
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.targetLocation: ",Block.targetLocation);
+                            Log(new Error(),"Block.targetLocation: ",Block.targetLocation);
                             Block.ScanWidth=scaledDimension
                             Block.ScanHeight=scaledDimension
                         }else if (Block.spellSlot==5){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Priority is buff image scan");
-                            //do buffs image scans here
+                            Log(new Error(),"Priority is buff image scan");
+                            //TODO buffs image scans here
+                            Block.targetLocation=[]
+                            let SelectedRegion=ScanningPictureRegions[5][""+this.#selectedScreen.size.height]
+                            let X = Math.floor(SelectedRegion.XFunction(this.scaleFactor))
+                            let Y = Math.floor(SelectedRegion.YFunction(this.scaleFactor))
+                            let Scale = Math.floor(SelectedRegion.ScaleFunction(this.scaleFactor))
+                            Log(new Error(),"X,Y,Scale: ",X,Y,Scale);
+                            Block.ScanWidth=Scale
+                            Block.ScanHeight=Scale
+
+                            let {data,info} = await sharp(Block.ScanImagePath).resize(Scale,Scale).ensureAlpha().raw().toBuffer({resolveWithObject:true})
+                            Block.ScanImageBuffer=data
+                            Log(new Error(),"ScanWidth and ScanHeight: ",Block.ScanWidth,Block.ScanHeight);
+                            for(let y=0;y<SelectedRegion.Settings.width;y++){
+                                for(let z=0;z<SelectedRegion.Settings.height;z++){
+                                    Block.targetLocation.push({X:Math.floor(X+(SelectedRegion.Settings.WidthPadding*y+Scale*y))+1,Y:Math.floor(Y-(SelectedRegion.Settings.HeightPadding*z+Scale*z))})
+                                }
+                            }
+                            Log(new Error(),"Block.TargetLocation: ",Block.targetLocation);
                         }else if(Block.spellSlot==6){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Priority is custom location image scan");
+                            Log(new Error(),"Priority is custom location image scan");
                             //handle custom image scans here
+                            let {data,info} = await sharp(Block.ScanImagePath).ensureAlpha().raw().toBuffer({resolveWithObject:true})
+                            Block.ScanImageBuffer=data
+                            Block.targetLocation={X:Block.scanCustomLocation[0],Y:Block.scanCustomLocation[1]}
+                            Block.ScanWidth=info.width
+                            Block.ScanHeight=info.height
                         }else{throw new Error("invalid Block.spellSlot")}
                     }else{
                         throw new Error("invalid Block.scanType")
@@ -344,14 +525,14 @@ class Script
         }
     }
     
-    checkImageScan(Block,bIsTesting,BlockIndex){
+    async checkImageScan(Block,bIsTesting,BlockIndex){
         try {
             // let Block = this.Blocks[BlockIndex]
             let conditionMet=false
             //if(Block.status=="playing"&&(Block.output=="stop-prevent-and-play"||Block.output=="stop-prevent-and-play-all"))PreventIndex=BlockIndex;
             if(!bIsTesting&&Block.startStatus=="playing"&&!Block.Started)
             {
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK STARTS ACTIVE");
+                Log(new Error(),"BLOCK STARTS ACTIVE");
                 console.log("Block.status: ",Block.status);
                 return Promise.resolve(true)
             }
@@ -386,7 +567,7 @@ class Script
                             }
                             let ColorAtPixel = getPixelColor(Block.targetLocation)
                             conditionMet = isWithinConfidence(Block.targetColor,ColorAtPixel,Block.confidence) 
-                            if(conditionMet)if(bIsVerboseLogging)Log(ErrorParse(new Error()),"IMAGE CONDITION MET");
+                            if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
                             return Promise.resolve(conditionMet)
                         }
                     }else if(Block.scanType=="image"){
@@ -434,7 +615,7 @@ class Script
                         } else {
                             return CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight).then((ImageCaptureBuffer) =>{
                                 conditionMet=CompareImageBuffers(Block.ScanImageBuffer,ImageCaptureBuffer,Block.confidence)
-                                if(conditionMet)if(bIsVerboseLogging)Log(ErrorParse(new Error()),"IMAGE CONDITION MET");
+                                if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
                                 return conditionMet;
                             })
                         }
@@ -477,7 +658,7 @@ class Script
                                 let ColorAtPixel = getPixelColor(Block.targetLocation[x])
                                 conditionMet = isWithinConfidence(Block.targetColor,ColorAtPixel,Block.confidence) 
                                 if(conditionMet){
-                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"IMAGE CONDITION MET");
+                                    Log(new Error(),"IMAGE CONDITION MET");
                                     return Promise.resolve(conditionMet)
                                 }
                             }
@@ -485,16 +666,116 @@ class Script
                         }
                     }else if(Block.scanType){
                         console.log("Block wants buff location with image comparison");
-                        
-                        //Do crazy ass buff location with image comparison
+                        //crazy ass buff location with image comparison
+                        if(bIsTesting){
+                            let ScanData=[]
+                            await sharp(Block.ScanImageBuffer,{raw:{width:Block.ScanWidth,height:Block.ScanHeight,channels:4}})
+                            .toFormat('png')
+                            .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"TemplateImage.png"));
+                            for (let x=0;x<Block.targetLocation.length;x++){
+                                let ImageCaptureBuffer = await CaptureRegionToBuffer(Block.targetLocation[x].X,Block.targetLocation[x].Y,Block.ScanWidth,Block.ScanHeight)     
+                                await sharp(ImageCaptureBuffer,{raw:{width:Block.ScanWidth,height:Block.ScanHeight,channels:4}})
+                                .toFormat("png")
+                                .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"Buff"+(x+1)+"CapturedImage.png"));
+                                const diff = Buffer.alloc(ImageCaptureBuffer.length)
+                                const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,Block.ScanWidth,Block.ScanHeight,{diffMask:true,threshold:Threshold})
+                                let Similarity = 1-getAlpha(NumOfMismatch,0,Block.ScanWidth*Block.ScanHeight)
+                                await sharp(diff,{raw:{width:Block.ScanWidth,height:Block.ScanHeight,channels:4}})
+                                .toFormat("png")
+                                .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"Buff"+(x+1)+"ComparisonScan.png"))
+                                ScanData.push({ScanLocation:Block.targetLocation[x],CurrentConfidence:Similarity,DidPrioritySucceed:Similarity>=Block.confidence})
+                            }
+                            ScanData.push({TargetColor:Block.targetColor,ConfidenceNeeded:Block.confidence})
+                            fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(ScanData,null," "))
+                        }else{
+                            for(let x=0;x<Block.targetLocation.length;x++){
+                                let ImageCaptureBuffer=await CaptureRegionToBuffer(Block.targetLocation[x].X,Block.targetLocation[x].Y,Block.ScanWidth,Block.ScanHeight)
+                                const diff = Buffer.alloc(ImageCaptureBuffer.length)
+                                const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,Block.ScanWidth,Block.ScanHeight,{diffMask:true,threshold:Threshold})
+                                let Similarity = 1-getAlpha(NumOfMismatch,0,Block.ScanWidth*Block.ScanHeight)
+                                if(Similarity>=Block.confidence)return Promise.resolve(true);
+                            }
+                            return Promise.resolve(false);
+                        }
                     }else{throw new Error("invalid Block.scanType")}
                 }else{
-                    //do image scanning for custom location
+                    //image scanning for custom location
                     console.log("BLOCK WANTS CUSTOM SCANNING");
                     if(Block.scanType=="pixel"){
                         //Do custom location pixel comparison
+                        if(bIsTesting){
+                            console.log("Block.targetLocation: ",Block.targetLocation);
+                            let ColorAtPixel = getPixelColor(Block.targetLocation)
+                            let totalDifference = 0;
+                            const maxDifference = 255 * Block.targetColor.length;
+                            for (let i = 0; i < Block.targetColor.length; i++) {
+                                totalDifference += Math.abs(Block.targetColor[i] - ColorAtPixel[i]);
+                            }
+                            const Confidence = 1 - totalDifference / maxDifference;
+                            let DataArray={
+                                ScanLocation:Block.targetLocation,
+                                TargetColor:Block.targetColor,
+                                FoundColor:ColorAtPixel,
+                                ConfidenceNeeded:Block.confidence,
+                                CurrentConfidence:Confidence,
+                                DidPrioritySucceed:Confidence >= Block.confidence
+                            }
+                            console.log("Data Array: ",DataArray);
+                            fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
+                        }else{
+                            console.log("Block.targetLocation: ",Block.targetLocation);
+                            if (Block.targetLocation.X==undefined||Block.targetLocation.Y==undefined){
+                                console.error("Block.targetLocation failed! Values are not valid!")
+                                throw new Error("Block.targetLocation failed! Values are not valid!")
+                            }
+                            let ColorAtPixel = getPixelColor(Block.targetLocation)
+                            conditionMet = isWithinConfidence(Block.targetColor,ColorAtPixel,Block.confidence) 
+                            if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
+                            return Promise.resolve(conditionMet)
+                        }
                     }else if(Block.scanType){
-                        //Do crazy ass custom location with image comparison
+                        //crazy ass custom location with image comparison
+                        if(bIsTesting){
+                            sharp(Block.ScanImageBuffer, {raw: {width: Block.ScanWidth,height: Block.ScanHeight,channels: 4}})
+                                .toFormat('png')
+                                .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"TemplateImage.png"))
+                                .then(() => {
+                                    CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight).then((ImageCaptureBuffer)=>{
+                                        sharp(ImageCaptureBuffer,{raw:{width:Block.ScanWidth,height:Block.ScanHeight,channels:4}})
+                                        .toFormat("png")
+                                        .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"CapturedImage.png"))
+                                        .then(()=>{
+                                            const diff = Buffer.alloc(ImageCaptureBuffer.length)
+                                            const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,Block.ScanWidth,Block.ScanHeight,{diffMask:true,threshold: Threshold})
+                                            let Similarity = 1-getAlpha(NumOfMismatch,0,Block.ScanWidth*Block.ScanHeight)
+                                            sharp(diff, { raw: { width: Block.ScanWidth, height: Block.ScanHeight, channels: 4 } })
+                                                .toFormat("png")
+                                                .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ComparisonScan.png"))
+                                                .then(() => {
+                                                    let DataArray={
+                                                        ScanLocation:Block.targetLocation,
+                                                        ScanDimensions:{Width:Block.ScanWidth,Height:Block.ScanHeight},
+                                                        ConfidenceNeeded:Block.confidence,
+                                                        CurrentConfidence:Similarity,
+                                                        DidPrioritySucceed:Similarity >= Block.confidence
+                                                    }
+                                                    console.log("Data Array: ",DataArray);
+                                                    fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
+                                                })
+                                                .catch((err) => console.error("Error saving diff image:", err));
+                                        })
+                                        .catch(error=>{console.error("Error saving capture image: ",error);
+                                        })
+                                    })
+                                })
+                        }else{
+                            //return promise here
+                            let ImageCaptureBuffer = await CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight)
+                            const diff = Buffer.alloc(ImageCaptureBuffer.length)
+                            const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,Block.ScanWidth,Block.ScanHeight,{diffMask:true,threshold:Threshold})
+                            let Similarity=1-getAlpha(NumOfMismatch,0,Block.ScanWidth*Block.ScanHeight)
+                            return Similarity>=Block.confidence
+                        }
                     }else{throw new Error("invalid Block.scanType")}
                 }
             }
@@ -506,9 +787,9 @@ class Script
 
     
     doOutputs(Block,BlockIndex,PreventIndex,window){
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"DOING OUTPUTS");
+        Log(new Error(),"DOING OUTPUTS");
         if(PreventIndex>BlockIndex){
-            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
+            Log(new Error(),"STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
             return PreventIndex
         }
         console.log("Output array: ",Block.outputArray);
@@ -549,36 +830,36 @@ class Script
             { 
                 if(Block.Started==false&&Block.startStatus=="playing")Block.Started=true;
                 if(Stop){
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"ATTEMPTING TO STOP MUSIC");
+                    Log(new Error(),"ATTEMPTING TO STOP MUSIC");
                     for(let y=BlockIndex;y>=0;y--){
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"STOPPING ALL TRACKS");
+                        Log(new Error(),"STOPPING ALL TRACKS");
                         this.Blocks[y].stopAllTracks();
                     }
                 }else{
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"TRACK NOT DESIGNED TO STOP OTHER MUSIC");
+                    Log(new Error(),"TRACK NOT DESIGNED TO STOP OTHER MUSIC");
                 }
                 if(Prevent){
                     if(BlockIndex>=PreventIndex){
-                        if(bIsVerboseLogging){
-                            Log(ErrorParse(new Error()),"SETTING PREVENTATIVE INDEX");
+                        {
+                            Log(new Error(),"SETTING PREVENTATIVE INDEX");
                             PreventIndex=BlockIndex;
                         }
                     }
                     Block.PreventCallback=()=>{
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"PreventCallback called");
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.status: ",Block.status);
+                        Log(new Error(),"PreventCallback called");
+                        Log(new Error(),"Block.status: ",Block.status);
                         if(Block.status!="playing")PreventIndex=0;
                     }
                 }
                 if(Play||PlayAll){
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK SWITCHED TO PLAYING");
+                    Log(new Error(),"BLOCK SWITCHED TO PLAYING");
                     // Block.changeStatus("playing");
                     if(PlayAll)
                     {
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"PLAYING ALL TRACKS");
+                        Log(new Error(),"PLAYING ALL TRACKS");
                         for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
                     }else{
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"PLAYING TRACK");
+                        Log(new Error(),"PLAYING TRACK");
                         if(Block.Tracks.length>0)
                         {
                             if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
@@ -588,33 +869,33 @@ class Script
                             Block.TrackIndex++;
                             if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
                         }else{
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"NO TRACKS FOUND. SKIPPING");
+                            Log(new Error(),"NO TRACKS FOUND. SKIPPING");
                         }
                     }
                 }else{
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK NOT DESIGNED FOR PLAYING");
+                    Log(new Error(),"BLOCK NOT DESIGNED FOR PLAYING");
                 }
                 if(Add){
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK SWITCHED TO PLAYING. Adding Value");
+                    Log(new Error(),"BLOCK SWITCHED TO PLAYING. Adding Value");
                     // Block.changeStatus("playing");
                     Variables[output.stack]+=output.value;
                     if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables})
                 }
                 if(Sub){
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK SWITCHED TO PLAYING. Subtracting value");
+                    Log(new Error(),"BLOCK SWITCHED TO PLAYING. Subtracting value");
                     // Block.changeStatus("playing");
                     Variables[output.stack]-=output.value;
                     if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables})
                 }
                 if(Set){
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK SWITCHED TO PLAYING. Setting value");
+                    Log(new Error(),"BLOCK SWITCHED TO PLAYING. Setting value");
                     // Block.changeStatus("playing");
                     Variables[output.stack]=output.value;
                     if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables})
                 }
 
             } else{
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK WAS ALREADY ACTIVE/DISABLED: ",Block.status);
+                Log(new Error(),"BLOCK WAS ALREADY ACTIVE/DISABLED: ",Block.status);
             }
         }
         Block.changeStatus("playing");
@@ -623,7 +904,7 @@ class Script
     async startScanning(window,MainWindow)
     {
         mainWindow=MainWindow;
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Begin scanning");
+        Log(new Error(),"Begin scanning");
         if(mainWindow){
             let Blocks=[]
             for(let x=0;x<this.Blocks.length;x++){
@@ -649,7 +930,7 @@ class Script
                     {
                         PreventIndex=this.doOutputs(Block,BlockIndex,PreventIndex,window)
                     }else{
-                        // if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CONDITION WAS NOT MET");
+                        // Log(new Error(),"CONDITION WAS NOT MET");
                     }
                     for(let z=0;z<Block.conditionalArray.length;z++){
                         let Cond = Block.conditionalArray[z]
@@ -672,36 +953,36 @@ class Script
                                 break;
                         }
                         if (ConditionalMet){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.Status: ",Block.status);
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Cond.condOutput: ",Cond.condOutput);
+                            Log(new Error(),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
+                            Log(new Error(),"Block.Status: ",Block.status);
+                            Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
                             if(PreventIndex<=BlockIndex)
                             {
-                                // if(bIsVerboseLogging)Log(ErrorParse(new Error()),"block: ",Block.status);
-                                if(Block.status!="playing"){if(bIsVerboseLogging)Log(ErrorParse(new Error()),"BLOCK IS NO LONGER ACTIVE");}
+                                // Log(new Error(),"block: ",Block.status);
+                                if(Block.status!="playing"){Log(new Error(),"BLOCK IS NO LONGER ACTIVE");}
                                 if(Block.status=="playing"&&Cond.condOutput!="playing"){
-                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"STOP THAT SHIT RN");   
+                                    Log(new Error(),"STOP THAT SHIT RN");   
                                     Block.stopAllTracks()
                                 }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
-                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"PLAY THAT SHIT RN");
+                                    Log(new Error(),"PLAY THAT SHIT RN");
                                     if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
                                     this.doOutputs(Block,BlockIndex,PreventIndex,window)
                                 }else if(Block.status!=Cond.condOutput)
                                 {
-                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.Status: ",Block.status);
-                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Cond.condOutput: ",Cond.condOutput);
+                                    Log(new Error(),"Block.Status: ",Block.status);
+                                    Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
                                     Block.status==Cond.condOutput
                                 }else{
-                                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"SOMETHING IS SERIOUSLY WRONG WITH THE CONDITIONAL LOGIC!!");
+                                    Log(new Error(),"SOMETHING IS SERIOUSLY WRONG WITH THE CONDITIONAL LOGIC!!");
                                 }
                             }else{
-                                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"ACTION STOPPED DUE TO PREVENTION");
+                                Log(new Error(),"ACTION STOPPED DUE TO PREVENTION");
                             }
                         }
                     }
                 })
                 //TODO CHECK CONDITIONALS
-                //if(bIsVerboseLogging)Log(ErrorParse(new Error()),"block: ",Block.conditionalArray);
+                //Log(new Error(),"block: ",Block.conditionalArray);
             }
         },this.heartbeat)
     }
@@ -741,7 +1022,7 @@ class Script
             SelectedScreen:this.#selectedScreen,
             heartbeat:this.heartbeat,
             Blocks:this.Blocks.map((item)=>{
-                //if(bIsVerboseLogging)Log(ErrorParse(new Error()),"item: ",item);
+                //Log(new Error(),"item: ",item);
                 return item.toJSON()
             })
         }
@@ -752,16 +1033,14 @@ class Script
      */
     parseJSON(data)
     {
-        console.log("bIsVerboseLogging: ",bIsVerboseLogging);
-        
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Data saved: ",data);
+        Log(new Error(),"Data saved: ",data);
         if(data&&data.currentPriority)this.currentPriority = data.currentPriority;
         if(data&&data.heartbeat)this.heartbeat = data.heartbeat;
         if(data&&data.LeagueDir)this.changeLeagueDir(data.LeagueDir)
         if(data&&data.Blocks&&data.Blocks.length>0)
         {
             data.Blocks.forEach(element => {
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"element: ",element);
+                Log(new Error(),"element: ",element);
                 let NewBlock = new Block(element)
                 if(element.Tracks&&element.Tracks.length>0)
                 {
@@ -819,11 +1098,11 @@ class Block
     }
     changeStatus(newStatus)
     {
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"old status: ",this.status);
+        Log(new Error(),"old status: ",this.status);
         this.status=newStatus
         let Blocks=[{UUID:this.UUID,status:this.status}]
         mainWindow.send("UpdateValues",{Blocks:Blocks})
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"new status: ",this.status);
+        Log(new Error(),"new status: ",this.status);
         if(this.PreventCallback)this.PreventCallback()
     }
     checkStatus(){
@@ -860,7 +1139,7 @@ class Block
     removeTrack(UUID)
     {
         this.Tracks=this.Tracks.filter(track=>track.UUID!==UUID)
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"this.Tracks: ",this.Tracks);
+        Log(new Error(),"this.Tracks: ",this.Tracks);
     }
     toJSON(){
         return{
@@ -922,26 +1201,26 @@ class Track
     {
         function realStop(Self)
         {
-            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Stopping track...");
+            Log(new Error(),"Stopping track...");
             console.log("Song: ",Self.TrackURL);
-            if(Self.status=="inactive")if(bIsVerboseLogging){Log("Track is inactive. Skipping");return;}
+            if(Self.status=="inactive"){Log("Track is inactive. Skipping");return;}
             if(Self.ParentBlock.bIsFadeOut)
             {
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Fadding out...");
+                Log(new Error(),"Fadding out...");
                 AsyncTween(Self.GainNode,1,0,Self.ParentBlock.FadeOutDuration*1000).then(()=>{
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Song over?");
+                    Log(new Error(),"Song over?");
                     try {
                         Self.Source.stop();
                         Self.Source.disconnect();
                     } catch (error) {
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Source hasnt started yet");
+                        Log(new Error(),"Source hasnt started yet");
                     }
                     Self.status="inactive"
                     Self.ParentBlock.checkStatus()
                     // this.ParentBlock.status="scanning"
                     if(Self.FadeOutThread)clearTimeout(Self.FadeOutThread);
                     if(Self.VisualizerThread){
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"stopping visualizer");
+                        Log(new Error(),"stopping visualizer");
                         clearInterval(Self.VisualizerThread);
                         Self.VisualizerThread=undefined;
                         Self.visualizerWindow.send("stop-visualizer")
@@ -952,18 +1231,18 @@ class Track
                     Self.VisualizerThread=undefined;
                 })
             }else{
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Hard stopping");
+                Log(new Error(),"Hard stopping");
                 try {
                     Self.Source.stop();
                     Self.Source.disconnect();
                 } catch (error) {
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Source hasnt started yet");
+                    Log(new Error(),"Source hasnt started yet");
                 }
                 Self.status="inactive"
                 Self.ParentBlock.checkStatus()
                 // this.ParentBlock.status="scanning"
                 if(Self.FadeOutThread)clearTimeout(Self.FadeOutThread);
-                if(Self.VisualizerThread){if(bIsVerboseLogging)Log(ErrorParse(new Error()),"stopping visualizer");
+                if(Self.VisualizerThread){Log(new Error(),"stopping visualizer");
                     clearInterval(Self.VisualizerThread);Self.VisualizerThread=undefined;}
                 Self.FadeOutThread=undefined;
                 Self.GainNode=undefined;
@@ -1026,14 +1305,14 @@ class Track
                 this.Source.start()
                 if(this.ParentBlock.bIsFadeIn&&this.ParentBlock.FadeInDuration<=this.TrackDuration)
                 {
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Fading in...");
+                    Log(new Error(),"Fading in...");
                     this.GainNode.gain.value=0
                     AsyncTween(this.GainNode,0,1,this.ParentBlock.FadeInDuration*1000)
                 }
             this.status="active"
-            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"this.status: ",this.status);
+            Log(new Error(),"this.status: ",this.status);
             this.Source.onended = ()=>{
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"song ended");
+                Log(new Error(),"song ended");
                 this.status="inactive"
                 this.ParentBlock.checkStatus()
                 if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
@@ -1043,23 +1322,23 @@ class Track
             }
             if(this.ParentBlock.bIsFadeOut&&this.ParentBlock.FadeOutDuration<=this.TrackDuration)
             {
-                if(bIsVerboseLogging)Log(ErrorParse(new Error()),"FADING SONG OUT IN ",(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000," MS")
+                Log(new Error(),"FADING SONG OUT IN ",(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000," MS")
                 this.FadeOutThread = setTimeout(()=>{
-                    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"FADING SONG OUT")
+                    Log(new Error(),"FADING SONG OUT")
                     AsyncTween(this.GainNode,1,0,this.ParentBlock.FadeOutDuration*1000).then(()=>{
-                        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Song over?");
+                        Log(new Error(),"Song over?");
                         try {
                             Self.Source.stop();
                             Self.Source.disconnect();
                         } catch (error) {
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Source hasnt started yet");
+                            Log(new Error(),"Source hasnt started yet");
                         }
                         Self.status="inactive"
                         Self.ParentBlock.checkStatus()
                         // this.ParentBlock.status="scanning"
                         if(Self.FadeOutThread)clearTimeout(Self.FadeOutThread);
                         if(Self.VisualizerThread){
-                            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"stopping visualizer");
+                            Log(new Error(),"stopping visualizer");
                             clearInterval(Self.VisualizerThread);
                             Self.VisualizerThread=undefined;
                             Self.visualizerWindow.send("stop-visualizer")
@@ -1090,18 +1369,18 @@ async function getTrackLength(audioContext,filePath)
         // Decoding finished
         buffer = decoder.getBuffer();
         bufferInfo= await audioContext.decodeAudioData(buffer.buffer)
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"duration: ", bufferInfo.duration);
+        Log(new Error(),"duration: ", bufferInfo.duration);
         return bufferInfo.duration
         case ".wav":
         buffer = fs.readFileSync(path.join(filePath))
         bufferInfo = await audioContext.decodeAudioData(buffer.buffer)
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"duration: ", bufferInfo.duration);
+        Log(new Error(),"duration: ", bufferInfo.duration);
         return bufferInfo.duration
     }
 }
 async function getBuffer(audioContext,filePath)
 {
-    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Audio Path: ",path.join(filePath));
+    Log(new Error(),"Audio Path: ",path.join(filePath));
     
     switch (path.extname(path.join(filePath)).toLowerCase())
     {
@@ -1181,9 +1460,7 @@ function interpolate(start,end,alpha)
 function Lerp(Min,Max,Alpha){
     return Min + (Max - Min) * Alpha;
 }
-function setLoggingState(state){
-    bIsVerboseLogging=state
-}
+
 function hexToRGB(hex)
 {
     hex=hex.replace("#","")
@@ -1192,10 +1469,7 @@ function hexToRGB(hex)
     const B=parseInt(hex.slice(4,6),16)
     return [R,G,B]
 }
-function ErrorParse(Error)
-{
-    return "["+Error.stack.split("\n")[1].trim().split(/[\\/]/).pop()+"]"
-}
+
 function getAlpha(currentValue, min, max) {
     if (currentValue < min) currentValue = min;
     if (currentValue > max) currentValue = max;
@@ -1221,7 +1495,8 @@ function CaptureRegionToBuffer(x,y,width,height){
     // }
     // return buffer
     return sharp(screenImage.image,{raw:{width,height,channels:4}})
-        .resize(64,64)
+        .resize(width,height)
+        .ensureAlpha()
         .raw()
         .toBuffer()
         .then((resizedBuffer)=>{
@@ -1284,16 +1559,16 @@ function getPixelColor({X, Y}) {
 function isWithinConfidence(Color1,Color2,Confidence)
 {
     if (Color1.length !== Color2.length)throw new Error("Arrays must have the same length");
-    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Color1: ",Color1);
-    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Color2: ",Color2);
+    Log(new Error(),"Color1: ",Color1);
+    Log(new Error(),"Color2: ",Color2);
     let totalDifference = 0;
     const maxDifference = 255 * Color1.length;
     for (let i = 0; i < Color1.length; i++) {
         totalDifference += Math.abs(Color1[i] - Color2[i]);
     }
     const similarity = 1 - totalDifference / maxDifference;
-    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Similarity: ",similarity);
+    Log(new Error(),"Similarity: ",similarity);
     return similarity >= Confidence;        
 }
 
-module.exports={getBuffer,AsyncTween,Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,setLoggingState,ErrorParse,hexToRGB}
+module.exports={getBuffer,AsyncTween,Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,hexToRGB}

@@ -6,21 +6,33 @@ const sharp = require("sharp")
 //const pixelmatch = require("pixelmatch")
 const fs = require("fs")
 require("dotenv").config()
-const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,setLoggingState,ErrorParse,hexToRGB} = require("./audioHandler");
-const {ClearFile,Log,SetDir} = require("./logging.js")
+const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,hexToRGB} = require("./audioHandler");
+const {ClearFile,Log,SetDir,SetWindow, WriteStream, SetVerbosity} = require("./logging.js")
 const {GlobalKeyboardListener} = require("node-global-key-listener")
 SetDir(app.getPath("userData"))
 let mainWindow,source,MasterScript,overlayWindow,Play,Stop
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 let errorTitles=[
-  "schum.",
-  "fool",
+  "Schum.",
+  "Fool",
   "You're wasting my time",
-  "Thats that",
+  "That's that",
   "Impossible",
   "Don't move",
   "You'd think to make a fool of me?",
-  "Ashes to ashes"
+  "Ashes to ashes",
+  "Rest in peace",
+  "How boring",
+  "Where's your motivation?",
+  "You're going down",
+  "Don't get so cocky",
+  "You TRASH!",
+  "This is the end!",
+  "Is that all?",
+  "Disappointing.",
+  "Tch...how droll",
+  "Pathetic",
+  "You mock me!?",
 ]
 let GetLeagueDirSave,SetLeagueDirSave,GetSavedScript,SetSavedScript,DeleteAllData,dialogBox,saveLocation,GetLoggingState,SetLoggingState,Pixelmatch,bIsVerboseLogging
 async function loadModules(){
@@ -37,66 +49,82 @@ async function loadModules(){
 }
 async function Open()
 {
-  if(dialogBox)return;
-  dialogBox = dialog.showOpenDialog({
-    filters:[{name:"JSON",extensions:["json"]}],
-    properties:["openFile"],
-  })
-  const result = await dialogBox
-  if(!result.canceled){
-    try {
+  try {
+    if(dialogBox)throw new Error("dialog box is in use");
+    dialogBox = dialog.showOpenDialog({
+      filters:[{name:"JSON",extensions:["json"]}],
+      properties:["openFile"],
+    })
+    const result = await dialogBox
+    if(!result.canceled){
+      dialogBox=undefined
       const jsonData = fs.readFileSync(result.filePaths[0], "utf-8");
       const data = JSON.parse(jsonData);
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),data);
+      Log(new Error(),"parsed data from file: ",data);
       MasterScript.parseJSON(data)
       mainWindow.send("UpdateAll",MasterScript)
-      } catch (error) {
-        console.error("Error reading or parsing JSON file:", error.message);
+    }
+    dialogBox=undefined
+  } catch (error) {
+    Log(new Error(),error)
+    console.error(error);
+    if(error.message!="dialog box is in use"){
+      if(dialogBox){
+        Log(new Error(),"dialog box is in use")
+        console.error("dialog box is in use");
+      }else{
         dialogBox = dialog.showMessageBox(null,{
           message: "There was problem reading the .JSON file. Contact Valentine",
           title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
           icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
         })
         const result = await dialogBox
-        if(result){
-          dialogBox=undefined
-        }
+        if(result)dialogBox=undefined;
       }
+    }
   }
-  dialogBox=undefined
 }
 async function SaveAs()
 {
-  if(dialogBox)return;
-  dialogBox = dialog.showSaveDialog({
-    filters:[{name:"JSON",extensions:["json"]}],
-  })
-  const result = await dialogBox
-  if(!result.canceled)
-  {
-    try {
+  try {
+    if(dialogBox)throw new Error("dialog box is in use");
+    dialogBox = dialog.showSaveDialog({
+      filters:[{name:"JSON",extensions:["json"]}],
+    })
+    const result = await dialogBox
+    if(!result.canceled){
       let TempData = MasterScript.toJSON()
       TempData.LeagueDir=undefined
       TempData.SelectedScreen=undefined
       const JsonData = JSON.stringify(TempData,null,2)
       fs.writeFileSync(result.filePath,JsonData,"utf-8")
       saveLocation=result.filePath
-    } catch (error) {
-      console.error("Could not save .JSON file: ",error.message)
-      dialog.showMessageBox(null,{
-        message: "There was problem saving the .JSON file. Contact Valentine",
-        title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-        icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-      })
+    }
+    dialogBox=undefined
+  } catch (error) {
+    Log(new Error(),error)
+    console.error(error);
+    if(error.message!="dialog box is in use"){
+      if(dialogBox){
+        Log(new Error(),"dialog box is in use")
+        console.error("dialog box is in use");
+      }else{
+        dialogBox = dialog.showMessageBox(null,{
+          message: "There was problem saving the .JSON file. Contact Valentine",
+          title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+          icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+        })
+        const result = await dialogBox
+        if(result)dialogBox=undefined;
+      }
     }
   }
-  dialogBox=undefined
 }
 loadModules().then(()=>{
   bIsVerboseLogging = GetLoggingState()||false;
+  SetVerbosity(bIsVerboseLogging)
   let bIsMouseDebugTools =false
   let MouseDebugThread
-  setLoggingState(bIsVerboseLogging)
   if (require("electron-squirrel-startup")) {
     app.quit();
   }
@@ -105,8 +133,8 @@ loadModules().then(()=>{
     // Create the browser window.
     const {width,height}= screen.getPrimaryDisplay().workAreaSize
     let mainWindowState = windowStateKeeper({
-      defaultHeight:Math.floor(height*0.4),
-      defaultWidth:Math.floor(width*0.4)
+      defaultHeight:Math.floor(height*0.65),
+      defaultWidth:Math.floor(width*0.45)
     })
     const mainmenu = Menu.buildFromTemplate([
       {
@@ -181,7 +209,7 @@ loadModules().then(()=>{
             label:"Toggle verbose logs",click:()=>{
               bIsVerboseLogging=!bIsVerboseLogging;
               SetLoggingState(bIsVerboseLogging)
-              if(bIsVerboseLogging)shell.showItemInFolder(path.join(app.getPath("userData"),"log.txt"))
+              shell.showItemInFolder(path.join(app.getPath("userData"),"log.txt"))
             }
           },
           {
@@ -240,6 +268,7 @@ loadModules().then(()=>{
       } 
       app.quit();
     })
+    SetWindow(mainWindow)
   };
   function createOverlay()
   {
@@ -290,6 +319,7 @@ loadModules().then(()=>{
     screen.on('display-added',updateDisplayCount);
     screen.on('display-removed', updateDisplayCount);
     Play=async function(bIsTesting){
+      if(dialogBox)return;
       if(bIsTesting){
         if(!fs.existsSync(path.join(app.getPath("userData"),"TestScans"))){
           fs.mkdirSync(path.join(app.getPath("userData"),"TestScans"))
@@ -305,41 +335,64 @@ loadModules().then(()=>{
         });
       } 
       if (MasterScript.Blocks.length<1) {
-        dialog.showMessageBox(null,{
+
+        dialogBox=dialog.showMessageBox(null,{
           message: "You need a priority block to continue. This play button should not be visible.",
           title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
           icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
         });
-        
+        const result = await dialogBox
+        if(result)dialogBox=undefined;
         return;
       }
       if(!MasterScript.getLeagueDir()){
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"User wans to use default screen reading, but hasn't given a league directory");
-        dialog.showMessageBox(null,{
-          message: "You need to reference your League of Legends installation to use \"border start\" or \"border end\" options. (This is because the app will read your HUD config and scale the coords in real time)",
-          title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-          icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-        })
-        return;
+        Log(new Error(),"User wans to use default screen reading, but hasn't given a league directory");
+        console.log("MasterScript.Blocks: ",MasterScript.Blocks);
+        for(let x=0;x<MasterScript.Blocks.length;x++){
+          console.log("MasterScript.Blocks[x]: ",MasterScript.Blocks[x]);
+          if(MasterScript.Blocks[x].spellSlot!=6){
+            dialogBox= dialog.showMessageBox(null,{
+              message: "You need to reference your League of Legends installation folder to use anything other than the\"custom location\" option. (This is because the app will read your HUD config and scale the coords in real time)",
+              title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+              icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+            })
+            const result=await dialogBox
+            if(result)dialogBox=undefined;
+            return;
+          }
+        }
       }
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"master script selected screen: ",MasterScript.getSelectedScreen());
+      Log(new Error(),"master script selected screen: ",MasterScript.getSelectedScreen());
       if(!MasterScript.getSelectedScreen())MasterScript.changeSelectedScreen(screen.getPrimaryDisplay())
       if(!ScanningAbilityBorderLocations[4][""+MasterScript.getSelectedScreen().size.height]){
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Screen isnt supported");
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Blocks: ",MasterScript.Blocks);
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"MasterScript.getLeagueDir(): ",MasterScript.getLeagueDir());
-        MasterScript.Blocks.forEach((element)=>{
+        Log(new Error(),"Screen isnt supported");
+        Log(new Error(),"Blocks: ",MasterScript.Blocks);
+        Log(new Error(),"MasterScript.getLeagueDir(): ",MasterScript.getLeagueDir());
+        MasterScript.Blocks.forEach(async(element)=>{
           if(element.scanLocation!="custom"){
-            if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Screen isnt supported and the user wants presets enabled");
-            dialog.showMessageBox(null,{
+            Log(new Error(),"Screen isnt supported and the user wants presets enabled");
+            dialogBox=dialog.showMessageBox(null,{
               message: "Your monitor resolution isn't supported. Please change \"border start\" or \"border end\" to custom and manually insert the pixel coordinates you'd like this app to scan for.",
               title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
               icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
             })
-            
+            const result=await dialogBox
+            if(result)dialogBox=undefined;
             return;
           }
         })
+      }
+      for(let x=0;x<MasterScript.Blocks.length;x++){
+        if(MasterScript.Blocks[x].scanType=="image"&&!MasterScript.Blocks[x].ScanImagePath){
+            dialogBox= dialog.showMessageBox(null,{
+              message: `Priority block #${x+1} is missing the image template to compare the screen with`,
+              title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+              icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+            })
+            const result=await dialogBox
+            if(result)dialogBox=undefined;
+            return;
+        }
       }
       if(bIsTesting){
         await MasterScript.updateScaleFactor()
@@ -483,10 +536,10 @@ loadModules().then(()=>{
     })
     ipcMain.handle("CreateDestroyOutput",(e,bCreate,BlockUUID,UUID)=>{
       let Block = MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"UUID: ",BlockUUID);
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block: ",Block);
+      Log(new Error(),"UUID: ",BlockUUID);
+      Log(new Error(),"Block: ",Block);
       if(!Block)return;
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"OutputArray before: ",Block.outputArray);
+      Log(new Error(),"OutputArray before: ",Block.outputArray);
       let Output={UUID:0};
       if(bCreate)
       {
@@ -502,7 +555,7 @@ loadModules().then(()=>{
         //destroy
         Block.outputArray=Block.outputArray.filter(output=>output.UUID!==UUID)
       }
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CondArray after: ",Block.outputArray);
+      Log(new Error(),"CondArray after: ",Block.outputArray);
       SetSavedScript(MasterScript.toJSON())
       return Output.UUID
     })
@@ -512,10 +565,10 @@ loadModules().then(()=>{
         if(!Block)throw new Error("Couldn't find target block with UUID provided: ",BlockUUID);
         let Output=Block.outputArray.find(Outputs=>Outputs.UUID===UUID)
         if(!Output)throw new Error("Couldn't find target output with UUID provided: ",UUID);
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Block.outputArray: ",Block.outputArray);
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Channel: ",channel);
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"value: ",value);
-        if(bIsVerboseLogging)Log(ErrorParse(new Error()),"UUID: ",UUID);
+        Log(new Error(),"Block.outputArray: ",Block.outputArray);
+        Log(new Error(),"Channel: ",channel);
+        Log(new Error(),"value: ",value);
+        Log(new Error(),"UUID: ",UUID);
         
         Output[channel]=value
         SetSavedScript(MasterScript.toJSON())
@@ -527,7 +580,7 @@ loadModules().then(()=>{
     ipcMain.handle("CreateDestroyCond",(e,bCreate,BlockUUID,value)=>{
       let Block = MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
       if(!Block)return;
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"CondArray before: ",Block.conditionalArray);
+      Log(new Error(),"CondArray before: ",Block.conditionalArray);
       let Conditional={UUID:0}
       if(bCreate)
       {
@@ -652,7 +705,7 @@ loadModules().then(()=>{
     })
     ipcMain.handle("RemovePriority",(e,UUID)=>{
       MasterScript.removeBlock(UUID)
-      if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Master Script: ",MasterScript);
+      Log(new Error(),"Master Script: ",MasterScript);
       
       mainWindow.send("UpdateAll",MasterScript)
       SetSavedScript(MasterScript.toJSON())
@@ -663,26 +716,53 @@ loadModules().then(()=>{
       if (MasterScript.Blocks)return MasterScript.Blocks.length
       return 0
     })
-
+    ipcMain.on("log",(e,...msg)=>{
+      console.log(...msg); 
+      {
+        // const finalizedString = msg.map(arg => typeof arg === 'object' ? JSON.stringify(arg,null," ") : (arg==undefined)?arg:arg.toString()).join(' ');
+        // let now = new Date()
+        // let formatDate = `[${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}.${String(now.getSeconds()).padStart(2, '0')}:${String(now.getMilliseconds()).padStart(3, '0')}]`
+        // WriteStream(`\n${formatDate} `+finalizedString)
+        const seen = new WeakSet();
+          const finalizedString = msg.map(arg => 
+            typeof arg === 'object' 
+              ? JSON.stringify(arg, (key, value) => {
+                  if (value !== null && typeof value === 'object') {
+                    if (seen.has(value)) {
+                      return '[Object object]';
+                    }
+                    seen.add(value);
+                  }
+                  return value;
+                }, " ") 
+              : (arg === undefined ? arg : arg.toString())
+          ).join(' ');
+          let now = new Date();
+          let formatDate = `[${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}.${String(now.getSeconds()).padStart(2, '0')}:${String(now.getMilliseconds()).padStart(3, '0')}]`;
+          WriteStream(`\n${formatDate} ` + finalizedString);
+      }
+    })
     mainWindow.send("UpdateDisplaySelection",[screen.getPrimaryDisplay()])
     
     MasterScript = new Script(undefined,screen.getPrimaryDisplay(),Pixelmatch)
 
     let Data = GetSavedScript();
-    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Data: ",Data);
+    Log(new Error(),"Data: ",Data);
     MasterScript.parseJSON(Data)
     mainWindow.send("UpdateAll",MasterScript)
     updateDisplayCount()
 
     //#region KEYBOARD LISTENER
-    if(bIsVerboseLogging)Log(ErrorParse(new Error()),"Attaching keyboard listener...");
+    Log(new Error(),"Attaching keyboard listener...");
     let kbListener
     kbListener = new GlobalKeyboardListener({windows:{onError:(err)=>console.log(err)}})
     kbListener.addListener((e,down)=>{
       if(e.state=="DOWN"&&e.name=="SQUARE BRACKET OPEN"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
+        if(mainWindow.isFocused())return;
         console.log("Start playing");
         Play()
       }else if(e.state=="DOWN"&&e.name=="SQUARE BRACKET CLOSE"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
+        if(mainWindow.isFocused())return;
         console.log("Stop playing");
         Stop()
       }else if(e.state=="DOWN"&&e.name=="BACKSLASH"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
