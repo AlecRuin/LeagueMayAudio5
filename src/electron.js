@@ -315,9 +315,13 @@ loadModules().then(()=>{
     function updateDisplayCount(...args)
     {
       console.log("UPDATING SCREENS FOR RENDERER");
-      
+      let Bounds=screen.getPrimaryDisplay().bounds
+      overlayWindow.setBounds({x:0,y:0,width:Bounds.width,height:Bounds.height})
+      overlayWindow.center()
+      console.log("new overlayWindow.getBounds: ",overlayWindow.getBounds());
       mainWindow.send("UpdateDisplaySelection",[screen.getPrimaryDisplay()])
     }
+    screen.on("display-metrics-changed",updateDisplayCount)
     screen.on('display-added',updateDisplayCount);
     screen.on('display-removed', updateDisplayCount);
     Play=async function(bIsTesting){
@@ -748,13 +752,16 @@ loadModules().then(()=>{
     mainWindow.send("UpdateDisplaySelection",[screen.getPrimaryDisplay()])
     
     MasterScript = new Script(undefined,screen.getPrimaryDisplay(),Pixelmatch)
-
-    let Data = GetSavedScript();
-    Log(new Error(),"Data: ",Data);
-    MasterScript.parseJSON(Data)
+    try {
+      let Data = GetSavedScript();
+      Log(new Error(),"Data: ",Data);
+      MasterScript.parseJSON(Data)
+    } catch (error) {
+      Log(new Error(),error)
+      MasterScript = new Script(undefined,screen.getPrimaryDisplay(),Pixelmatch)
+    }
     mainWindow.send("UpdateAll",MasterScript)
     updateDisplayCount()
-
     //#region KEYBOARD LISTENER
     Log(new Error(),"Attaching keyboard listener...");
     let kbListener

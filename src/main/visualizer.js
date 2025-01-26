@@ -151,6 +151,8 @@ window.electronAPI.SignalToRenderer("inbound-frequency",(Data,UUID)=>{
     drawVisualizer(Points)
 })
 window.electronAPI.SignalToRenderer("inbound-settings",(Data)=>{
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
     fillMode=Data.bFillVisualizer
     LineColor=hexToRGB(Data.VisualizerLineColor)
     FillColor=hexToRGB(Data.VisualizerFillColor)

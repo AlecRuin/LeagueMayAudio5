@@ -921,10 +921,7 @@ class Script
             //insert evil ass rape scanner
             for(let BlockIndex=this.Blocks.length-1;BlockIndex>=0;BlockIndex--){
                 let Block = this.Blocks[BlockIndex]
-                console.log("BlockIndex: ",BlockIndex);
                 this.checkImageScan(Block).then(result=>{
-                    console.log("Result of image scan: ",result);
-                    
                     if(result)
                     {
                         PreventIndex=this.doOutputs(Block,BlockIndex,PreventIndex,window)
