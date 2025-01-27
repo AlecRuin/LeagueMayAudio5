@@ -446,7 +446,6 @@ class Script
                             //buff pixel location
                             Block.targetLocation=[]
                             let SelectedRegion =  ScanningPictureRegions[5][""+(this.#selectedScreen.size.height*this.#selectedScreen.scaleFactor)]
-                            console.log("Selected Region: ",SelectedRegion);
                             let X = Math.floor(SelectedRegion.XFunction(this.scaleFactor))
                             let Y = Math.floor(SelectedRegion.YFunction(this.scaleFactor))
                             let Scale = Math.floor(SelectedRegion.ScaleFunction(this.scaleFactor))
@@ -531,7 +530,6 @@ class Script
             if(!bIsTesting&&Block.startStatus=="playing"&&!Block.Started)
             {
                 Log(new Error(),"BLOCK STARTS ACTIVE");
-                console.log("Block.status: ",Block.status);
                 return Promise.resolve(true)
             }
             if(bIsTesting||(Block.status=="scanning"&&Block.blockType=="image-scan"))
@@ -555,10 +553,8 @@ class Script
                                 CurrentConfidence:Confidence,
                                 DidPrioritySucceed:Confidence >= Block.confidence
                             }
-                            console.log("Data Array: ",DataArray);
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
                         }else{
-                            console.log("Block.targetLocation: ",Block.targetLocation);
                             if (Block.targetLocation.X==undefined||Block.targetLocation.Y==undefined){
                                 console.error("Block.targetLocation failed! Values are not valid!")
                                 throw new Error("Block.targetLocation failed! Values are not valid!")
@@ -570,46 +566,28 @@ class Script
                         }
                     }else if(Block.scanType=="image"){
                         //Do image scanning tech for icons
-                        // console.log("Block.TargetLocation: ",Block.targetLocation);
-                        // console.log("Block.ScanWidth and Block.ScanHeight: ",Block.ScanWidth,Block.ScanHeight );
                         if (bIsTesting) {
-                            console.log("Block.ScanImageBuffer: ",Block.ScanImageBuffer);
-                            
-                            sharp(Block.ScanImageBuffer, {raw: {width: 64,height: 64,channels: 4}})
-                                .toFormat('png')
-                                .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"TemplateImage.png"))
-                                .then(() => {
-                                    CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight).then((ImageCaptureBuffer)=>{
-                                        sharp(ImageCaptureBuffer,{raw:{width:64,height:64,channels:4}})
-                                        .toFormat("png")
-                                        .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"CapturedImage.png"))
-                                        .then(()=>{
-                                            const diff = Buffer.alloc(ImageCaptureBuffer.length)
-                                            const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,64,64,{diffMask:true,threshold: Threshold})
-                                            let Similarity = 1-getAlpha(NumOfMismatch,0,4096)
-                                            sharp(diff, { raw: { width: 64, height: 64, channels: 4 } })
-                                                .toFormat("png")
-                                                .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ComparisonScan.png"))
-                                                .then(() => {
-                                                    let DataArray={
-                                                        ScanLocation:Block.targetLocation,
-                                                        ScanDimensions:{Width:Block.ScanWidth,Height:Block.ScanHeight},
-                                                        ConfidenceNeeded:Block.confidence,
-                                                        CurrentConfidence:Similarity,
-                                                        DidPrioritySucceed:Similarity >= Block.confidence
-                                                    }
-                                                    console.log("Data Array: ",DataArray);
-                                                    fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
-                                                })
-                                                .catch((err) => console.error("Error saving diff image:", err));
-                                        })
-                                        .catch(error=>{console.error("Error saving capture image: ",error);
-                                        })
-                                    })
-                                })
-                                .catch((err) => {
-                                  console.error('Error saving PNG:', err);
-                                });
+                            await sharp(Block.ScanImageBuffer, {raw: {width: 64,height: 64,channels: 4}})
+                            .toFormat('png')
+                            .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"TemplateImage.png"));
+                            let ImageCaptureBuffer = await CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight,64,64);
+                            await sharp(ImageCaptureBuffer,{raw:{width:64,height:64,channels:4}})
+                            .toFormat("png")
+                            .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"CapturedImage.png"));
+                            const diff = Buffer.alloc(ImageCaptureBuffer.length)
+                            const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,64,64,{diffMask:true,threshold:Threshold})
+                            let Similarity = 1-getAlpha(NumOfMismatch,0,4096)
+                            await sharp(diff,{raw:{width:64,height:64,channels:4}})
+                            .toFormat("png")
+                            .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ComparisonScan.png"));
+                            let DataArray={
+                                ScanLocation:Block.targetLocation,
+                                ScanDimensions:{Width:Block.ScanWidth,Height:Block.ScanHeight},
+                                ConfidenceNeeded:Block.confidence,
+                                CurrentConfidence:Similarity,
+                                DidPrioritySucceed:Similarity >= Block.confidence
+                            }
+                            fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
                         } else {
                             return CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight).then((ImageCaptureBuffer) =>{
                                 conditionMet=CompareImageBuffers(Block.ScanImageBuffer,ImageCaptureBuffer,Block.confidence)
@@ -620,7 +598,6 @@ class Script
                     }
                 }else if(Block.spellSlot==5){
                     //do image scanning tech for buffs
-                    console.log("BLOCK WANTS BUFF SCANNING");
                     if(Block.scanType=="pixel"){
                         //Do buff location pixel comparison
                         if(bIsTesting){
@@ -643,12 +620,10 @@ class Script
                                 }
                                 ScanData.push(DataArray)
                             }
-                            console.log("scanData: ",ScanData);
                             ScanData.push({TargetColor:Block.targetColor,ConfidenceNeeded:Block.confidence})
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(ScanData,null," "))
                         }else{
                             for(let x=0;x<Block.targetLocation.length;x++){
-                                console.log("Block.targetLocation: ",Block.targetLocation);
                                 if (Block.targetLocation[x].x==undefined||Block.targetLocation[x].x==undefined){
                                     console.error("Block.targetLocation failed! Values are not valid!")
                                     throw new Error("Block.targetLocation failed! Values are not valid!")
@@ -663,7 +638,6 @@ class Script
                             return Promise.resolve(false)
                         }
                     }else if(Block.scanType){
-                        console.log("Block wants buff location with image comparison");
                         //crazy ass buff location with image comparison
                         if(bIsTesting){
                             let ScanData=[]
@@ -698,11 +672,9 @@ class Script
                     }else{throw new Error("invalid Block.scanType")}
                 }else{
                     //image scanning for custom location
-                    console.log("BLOCK WANTS CUSTOM SCANNING");
                     if(Block.scanType=="pixel"){
                         //Do custom location pixel comparison
                         if(bIsTesting){
-                            console.log("Block.targetLocation: ",Block.targetLocation);
                             let ColorAtPixel = getPixelColor(Block.targetLocation)
                             let totalDifference = 0;
                             const maxDifference = 255 * Block.targetColor.length;
@@ -718,10 +690,8 @@ class Script
                                 CurrentConfidence:Confidence,
                                 DidPrioritySucceed:Confidence >= Block.confidence
                             }
-                            console.log("Data Array: ",DataArray);
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
                         }else{
-                            console.log("Block.targetLocation: ",Block.targetLocation);
                             if (Block.targetLocation.X==undefined||Block.targetLocation.Y==undefined){
                                 console.error("Block.targetLocation failed! Values are not valid!")
                                 throw new Error("Block.targetLocation failed! Values are not valid!")
@@ -757,7 +727,6 @@ class Script
                                                         CurrentConfidence:Similarity,
                                                         DidPrioritySucceed:Similarity >= Block.confidence
                                                     }
-                                                    console.log("Data Array: ",DataArray);
                                                     fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
                                                 })
                                                 .catch((err) => console.error("Error saving diff image:", err));
@@ -790,7 +759,6 @@ class Script
             Log(new Error(),"STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
             return PreventIndex
         }
-        console.log("Output array: ",Block.outputArray);
         
         for(let x=0;x<Block.outputArray.length;x++){
             let Stop=false;
@@ -822,7 +790,6 @@ class Script
                     throw new Error("Output type isn't valid")
                     break;
             }
-            console.log("Output: ",output);
             
             if(Block.status=="scanning"||(Block.Started==false&&Block.startStatus=="playing"))
             { 
@@ -995,8 +962,6 @@ class Script
         }
         //reset all vars to default values
         Variables = {...VariableReset}
-        // console.log("VariableReset: ",VariableReset);
-        // console.log("Variables: ",Variables);
         if(mainWindow){
             let Blocks=[]
             for(let x=0;x<this.Blocks.length;x++){
@@ -1199,7 +1164,6 @@ class Track
         function realStop(Self)
         {
             Log(new Error(),"Stopping track...");
-            console.log("Song: ",Self.TrackURL);
             if(Self.status=="inactive"){Log("Track is inactive. Skipping");return;}
             if(Self.ParentBlock.bIsFadeOut)
             {
@@ -1472,7 +1436,7 @@ function getAlpha(currentValue, min, max) {
     if (currentValue > max) currentValue = max;
     return (currentValue - min) / (max - min);
 }
-function CaptureRegionToBuffer(x,y,width,height){
+function CaptureRegionToBuffer(x,y,width,height,resizeX,resizeY){
     const screenImage = robot.screen.capture(x,y,width,height)
     // const buffer = Buffer.alloc(pixelData.length*4);
     // const pixelData=[];
@@ -1492,7 +1456,7 @@ function CaptureRegionToBuffer(x,y,width,height){
     // }
     // return buffer
     return sharp(screenImage.image,{raw:{width,height,channels:4}})
-        .resize(width,height)
+        .resize((resizeX)?resizeX:width,(resizeY)?resizeY:height)
         .ensureAlpha()
         .raw()
         .toBuffer()
@@ -1517,10 +1481,6 @@ function CaptureRegionToBuffer(x,y,width,height){
 //     return buffer
 // }
 function CompareImageBuffers(ReferenceBuffer,CaptureBuffer,confidence){
-    // console.log("ReferenceBuffer: ",ReferenceBuffer);
-    // console.log("CaptureBuffer: ",CaptureBuffer);
-    
-    
     if (ReferenceBuffer.length !== CaptureBuffer.length) {
         console.error("Buffer lengths do not match!");
         return;
@@ -1528,11 +1488,6 @@ function CompareImageBuffers(ReferenceBuffer,CaptureBuffer,confidence){
     const diff = Buffer.alloc(ReferenceBuffer.length)
     const NumOfMismatch = Pixelmatch(CaptureBuffer,ReferenceBuffer,diff,64,64,{diffMask:true,threshold: Threshold})
     let Similarity = 1-getAlpha(NumOfMismatch,0,4096)
-    console.log("similarity: ",Similarity);
-    // console.log("Num of mismatch pixels: ",NumOfMismatch);
-    // console.log("Confidence: ",confidence);
-    console.log("Similarity>=confidence:",Similarity>=confidence);
-    
     return Similarity>=confidence
 }
 function PictureToBuffer(referenceImagePath){

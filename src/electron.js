@@ -370,7 +370,7 @@ loadModules().then(()=>{
       }
       Log(new Error(),"master script selected screen: ",MasterScript.getSelectedScreen());
       if(!MasterScript.getSelectedScreen())MasterScript.changeSelectedScreen(screen.getPrimaryDisplay())
-      if(!ScanningAbilityBorderLocations[4][""+(MasterScript.getSelectedScreen().size.height/**MasterScript.getSelectedScreen().scaleFactor*/)]){
+      if(!ScanningAbilityBorderLocations[4][""+(MasterScript.getSelectedScreen().size.height*MasterScript.getSelectedScreen().scaleFactor)]){
         Log(new Error(),"Screen isnt supported");
         Log(new Error(),"Blocks: ",MasterScript.Blocks);
         Log(new Error(),"MasterScript.getLeagueDir(): ",MasterScript.getLeagueDir());
