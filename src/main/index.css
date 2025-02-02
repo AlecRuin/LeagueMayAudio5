@@ -12,6 +12,53 @@ body {
   flex-direction: column;
   margin: auto;
 }
+:root{
+  --darker-primary-color:2, 4, 6;
+  --primary-color: 6,9,15;
+  --lighter-primary-color:14,20,30;
+  --lightest-primary-color:34, 44, 63;
+  --secondary-color: 250,199,102;
+  --lightest-secondary-color: 248, 234, 209;
+  --lighter-secondary-color: 255,222,161;
+  --tertiary-color: 213, 102, 250;
+  --darker-tertiary-color:127, 60, 149;
+  --lighter-tertiary-color: 232, 163, 255;
+  --quaternary-color: 102, 250, 208;
+  --lighter-quaternary-color: 164, 255, 229;
+}
+.secondary-to-lighter-secondary{
+  background: linear-gradient(to right, rgb(var(--secondary-color)) 0%, rgb(var(--lighter-secondary-color)) 50%, rgb(var(--secondary-color)) 100%);
+  font-weight: 800;
+}
+.tertiary-to-lighter-tertiary{
+  background: linear-gradient(to right, rgb(var(--tertiary-color)) 0%, rgb(var(--lighter-tertiary-color)) 50%, rgb(var(--tertiary-color)) 100%);
+  font-weight: 800;
+}
+.quaternary-to-lighter-quaternary{
+  background: linear-gradient(to right, rgb(var(--quaternary-color)) 0%, rgb(var(--lighter-quaternary-color)) 50%, rgb(var(--quaternary-color)) 100%);
+  font-weight: 800;
+}
+
+.text-gradient-bg{
+  position: relative;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.shimmer{
+  animation: shimmer 3.0s linear infinite;
+  background-size: 200% 100%;
+}
+@keyframes shimmer {
+  0% {
+      background-position: 0% 0%;
+  }
+  100% {
+      background-position: 200% 0%;
+  }
+}
+
 .m-a{
   margin: auto;
 }
@@ -44,8 +91,8 @@ img{
   padding: 10px;
   margin: 20px;
   color: rgb(248, 234, 209);
-  max-width: 450px;
-  width: 85%;
+  max-width: 550px;
+  width: 90%;
 }
 .w-100{
   width: 100%;

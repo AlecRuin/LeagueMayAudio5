@@ -415,6 +415,7 @@ loadModules().then(()=>{
       }
     }
     Stop=function(){
+      Log(new Error(),"Stopping scanning process")
       MasterScript.stopScanning();
       mainWindow.send("UpdatePlayPauseState",false)
     }
@@ -584,6 +585,20 @@ loadModules().then(()=>{
         return false
       }
     })
+    ipcMain.on("ChangePostOpValue",(e,BlockUUID,UUID,channel,value)=>{
+      try {
+        let Block = MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
+        if(!Block)throw new Error("Couldn't find target block with UUID provided: ",BlockUUID);
+        let PostOp=Block.PostTrackOperations.find(PostOp=>PostOp.UUID===UUID)
+        if(!PostOp)throw new Error("Couldn't find target output with UUID provided: ",UUID);
+        Log(new Error(),"Block.PostOpArray: ",Block.PostTrackOperations);
+        PostOp[channel]=value
+        SetSavedScript(MasterScript.toJSON())
+      } catch (error) {
+        console.error("Error occured: ",error)
+        return false
+      }
+    })
     ipcMain.handle("CreateDestroyCond",(e,bCreate,BlockUUID,value)=>{
       let Block = MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
       if(!Block)return;
@@ -595,18 +610,41 @@ loadModules().then(()=>{
         Conditional ={
           UUID:generateUUID("condIdSet"),
           condOperator:"",
-          condStack:"Jackpot",
+          condStack:"",
           condInput:0,
           condOutput:"",
         }
         Block.conditionalArray.push(Conditional)
       }else{
         //destroy
-        Block.conditionalArray=Block.conditionalArray.filter(condit=>condit.UUID!==condit.UUID)
+        Block.conditionalArray=Block.conditionalArray.filter(condit=>condit.UUID!==value)
       }
       SetSavedScript(MasterScript.toJSON())
       return Conditional.UUID
     })
+    ipcMain.handle("CreateDestroyPostOp",(e,bCreate,BlockUUID,value)=>{
+      let Block = MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
+      if(!Block)return;
+      Log(new Error(),"PostOP before: ",Block.PostTrackOperations);
+      let PostOP={UUID:0}
+      if(bCreate)
+      {
+        //create
+        PostOP ={
+          UUID:generateUUID("postTrackOps"),
+          cmd:"play",//possible cmds: play,play-all,sub,set,prevent,add,stop-all-lower,
+          stack:"Jackpot",
+          value:0
+        }
+        Block.PostTrackOperations.push(PostOP)
+      }else{
+        //destroy
+        Block.PostTrackOperations=Block.PostTrackOperations.filter(Postop=>Postop.UUID!==value)
+      }
+      SetSavedScript(MasterScript.toJSON())
+      return PostOP.UUID
+    })
+
     ipcMain.on("ChangeCondValue",(e,BlockUUID,UUID,channel,value)=>{
       let Block= MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
       if(!Block)return;
@@ -676,24 +714,33 @@ loadModules().then(()=>{
         return false
     })
     ipcMain.handle("OpenTrack",async(e,UUID)=>{
-      if(dialogBox)return;
-      let Block = MasterScript.Blocks.find(block=>block.UUID===UUID);
-      if(!Block)return;
-      dialogBox = dialog.showOpenDialog({
-        filters:[{name:"Audio files",extensions:["mp3","wav"]}],
-        properties:["openFile"],
-      })
-      const result = await dialogBox
-      if(!result.canceled&&fs.existsSync(path.join(result.filePaths[0])))
-      {
-        let NewTrack = new Track(path.join(result.filePaths[0]))
-        Block.addTrack(NewTrack)
+      try {
+        if(dialogBox)throw new Error("Dialog box is in use");
+        let Block = MasterScript.Blocks.find(block=>block.UUID===UUID);
+        if(!Block)throw new Error("Could not find block with provided UUID");
+        dialogBox = dialog.showOpenDialog({
+          filters:[{name:"Audio files",extensions:["mp3","wav"]}],
+          properties:["openFile"],
+        })
+        const result = await dialogBox
+        if(!result.canceled&&fs.existsSync(path.join(result.filePaths[0])))
+        {
+          let NewTrack = new Track(path.join(result.filePaths[0]))
+          Block.addTrack(NewTrack)
+          dialogBox=undefined
+          SetSavedScript(MasterScript.toJSON())
+          let tracks =[]
+          if(Block.Tracks.length>0)Block.Tracks.forEach(track=>tracks.push({TrackURL:track.TrackURL,UUID:track.UUID}));
+          Log(new Error(),"tracks: ",tracks)
+          return tracks
+        }
         dialogBox=undefined
-        SetSavedScript(MasterScript.toJSON())
-        return Block.Tracks
+        return false
+        
+      } catch (error) {
+        Log(new Error(),error)
+        return false
       }
-      dialogBox=undefined
-      return false
     })
     ipcMain.handle("RemoveTrack",(e,UUID,value)=>{let Block = MasterScript.Blocks.find(block=>block.UUID===UUID)
       if(!Block)return;

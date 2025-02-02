@@ -7,7 +7,8 @@ async function LoadModules(){
     Log(new Error(),"trackoptions loaded");
     await import ("./components/conditional.js")
     Log(new Error(),"conditional loaded");
-    
+    await import ("./components/posttrack-operations.js")
+    Log(new Error(),"posttrack-operations loaded")
     Log(new Error(),"All modules loaded");
 }
 
@@ -105,13 +106,13 @@ async function CreateOutput(UUID,OutputDiv,options)
     let NewOutput=document.createElement("li")
     NewOutput.innerHTML=`
     <select class="OutputSelect" id=${"OutputSelect-"+(UUID)+"-"+(OutputUUID)}>   
-        <option ${(options&&options.cmd=="play")?"selected":""} value="play">Start playing from music track(s)</option> 
-        <option ${(options&&options.cmd=="stop")?"selected":""} value="stop">Stop playing lower-priority music track(s)</option>
-        <option ${(options&&options.cmd=="play-all")?"selected":""} value="play-all">Start playing all music tracks</option>
-        <option ${(options&&options.cmd=="prevent")?"selected":""} value="prevent">Prevent lower-priority music tracks from playing</option>
-        <option ${(options&&options.cmd=="add")?"selected":""} value="add">Add X stacks of </option>
+        <option ${(options&&options.cmd=="play")?"selected":""} value="play">Start playing from track(s)</option> 
+        <option ${(options&&options.cmd=="stop")?"selected":""} value="stop">Stop playing lower-priority track(s)</option>
+        <option ${(options&&options.cmd=="play-all")?"selected":""} value="play-all">Start playing all tracks</option>
+        <option ${(options&&options.cmd=="prevent")?"selected":""} value="prevent">Prevent lower-priority tracks from playing</option>
+        <option ${(options&&options.cmd=="add")?"selected":""} value="add">Add X stacks of</option>
         <option ${(options&&options.cmd=="sub")?"selected":""} value="sub">Subtract X stacks of</option>
-        <option ${(options&&options.cmd=="set")?"selected":""} value="set">Set X stacks of </option>
+        <option ${(options&&options.cmd=="set")?"selected":""} value="set">Set X stacks of</option>
     </select>
     <select class="OutputStackSelect" style=${(options&&(options.cmd=="add"||options.cmd=="sub"||options.cmd=="set"))?"display:inline-block;":"display:none;"} id=${"OutputStackSelect-"+(UUID)+"-"+(OutputUUID)}>
         <option ${(options&&options.stack=="Jackpot")?"selected":""}>Jackpot</option>
@@ -203,7 +204,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
                 </select>
 
                 <button id=${"ScanImageBrowseBtn-"+UUID} style=${(options&&options.scanType=="image")?"display:inline-block;":"display:none;"}>Browse</button>
-                <span id=${"ScanImageSpan-"+UUID} style=${(options&&options.scanType=="image")?"display:inline-block;":"display:none;"}>
+                <span class="shimmer text-gradient-bg tertiary-to-lighter-tertiary" id=${"ScanImageSpan-"+UUID} style=${(options&&options.scanType=="image")?"display:inline-block;":"display:none;"}>
                     ${(options&&options.ScanImagePath)?options.ScanImagePath.split(/[/\\]/).pop():""}
                 </span>
 
@@ -236,22 +237,23 @@ async function CreatePriorityBlock(UUID,options,optionalX)
             <br>If I find the correct target with confidence of <input id=${"ConfidenceInput-"+(UUID)} type=\"number\" min=\"0\" max=\"1\" value=${(options&&options.confidence)?options.confidence:"0.7"} >(0-1),
             </div>
             <div class="w-100">
-            I will
-            <button id=${"AddOutputBtn-"+(UUID)}>Add action</button>
-            <div id=${"OutputDiv-"+(UUID)}>
+                I will
+                <button id=${"AddOutputBtn-"+(UUID)}>Add action</button>
+                <div id=${"OutputDiv-"+(UUID)}></div>
+                and will switch to \"playing\" mode.
+                <br>
             </div>
-            and be considered \"playing.\"
-            <br>
-        
+        </div>
+
+        <div class="w-100" id=${"ending-form-"+UUID}>
+            <p id=${"CondTitle-"+UUID} class=\"TracksTitle\">CONDITIONALS</p>
             <button id=${"AddCondBtn-"+(UUID)}>Add a conditional</button>
             <div id=${"CondArrDiv-"+(UUID)}></div>
-        </div>
-        <div class="w-100" id=${"ending-form-"+UUID}>
             <div id=${"add-tracks-div-"+UUID} class="flex w-100 flex-wrap">
                 <p class=\"TracksTitle\">TRACKS</p>
                 <button id=${"SoundsBtn-"+(UUID)}>ADD SFX</button>
             </div>
-            <div id=${"SoundsList-"+(UUID)}></div>
+            <div class="shimmer text-gradient-bg quaternary-to-lighter-quaternary" id=${"SoundsList-"+(UUID)}></div>
         </div>
     `
     PriorityContainer.appendChild(NewPriorityBlockDiv)
@@ -285,12 +287,18 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     let StatusSpan=document.getElementById("StatusSpan-"+UUID)
     let endingform = document.getElementById("ending-form-"+UUID)
     let addtracksdiv = document.getElementById("add-tracks-div-"+UUID)
+    let CondTitle = document.getElementById("CondTitle-"+UUID)
     //#endregion
-    
+    let postTrack = document.createElement("posttrack-ops")
+    postTrack.UUID = UUID
+    postTrack.options=(options&&options.PostTrackOperations)?options.PostTrackOperations:undefined;
+    NewPriorityBlockDiv.insertBefore(postTrack,endingform)
+    // NewPriorityBlockDiv.appendChild(postTrack)
+
     let trackoptions = document.createElement("track-options")
     trackoptions.UUID=UUID
     trackoptions.options=options
-    endingform.insertBefore(trackoptions,addtracksdiv)
+    endingform.insertBefore(trackoptions,CondTitle)
 
     let priorityblock_header = document.createElement("priorityblock-header")
     priorityblock_header.UUID=UUID
@@ -403,10 +411,10 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     SoundsBtn.addEventListener("click",async()=>{
         Log(new Error(),`Asking Main process to open dialog box to pick track`)
         //pub the track, and get a return of them and get num of tracks
-        const Tracks = await window.electronAPI.InvokeRendererToMain("OpenTrack",UUID)
-        Log(new Error(),`Track selected:`,Tracks)
+        const Tracks = await window.electronAPI.InvokeRendererToMain("OpenTrack",UUID);
+        Log(new Error(),`Track selected:`,Tracks);
         //delete all previous elements
-        if (Tracks) RefreshTrackList(UUID,SoundsList,Tracks)
+        if (Tracks) RefreshTrackList(UUID,SoundsList,Tracks);
     })
     if(options&&options.conditionalArray)
     {

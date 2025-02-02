@@ -59,14 +59,14 @@ class TrackOptions extends CommonParentUtils{
                         <span class="VisColorSpan" id=${"VisColorSpan-"+this.UUID} style=${(this.options&&this.options.bFillVisualizer)?"display:inline-block;":"display:none;"}>
                             Fill color: <input type=color class="FillVisColorInput" id=${"FillVisColorInput-"+this.UUID} value=${(this.options&&this.options.VisualizerFillColor)?this.options.VisualizerFillColor:"#2FD4E3"}></input>
                             Fill pattern: <button class="VisFillPatternBtn" id=${"VisFillPatternBtn-"+this.UUID}>Browse</button>
-                            <span style=${(this.options&&this.options.VisualizerFillPatternPath)?"display:inline-block;":"display:none;"} class="VisFillPatternSpan" id=${"VisFillPatternSpan-"+this.UUID}>${(this.options&&this.options.VisualizerFillPatternPath)?this.options.VisualizerFillPatternPath.split(/[/\\]/).pop():""}
+                            <span class="VisFillPatternSpan shimmer text-gradient-bg secondary-to-lighter-secondary" style=${(this.options&&this.options.VisualizerFillPatternPath)?"display:inline-block;":"display:none;"} id=${"VisFillPatternSpan-"+this.UUID}>${(this.options&&this.options.VisualizerFillPatternPath)?this.options.VisualizerFillPatternPath.split(/[/\\]/).pop():""}
                                 <button class="VisFillPatternCloseBtn" id=${"VisFillPatternCloseBtn-"+this.DOCUMENT_FRAGMENT_NODEUUID}>X</button> 
                             </span>
                         </span>
                 </div>
             `
             let VisFillPatternBtn = this.div.querySelector(".VisFillPatternBtn")
-            let VisFillPatternSpan = this.div.querySelector(".VisFillPatternSpan")
+            let VisFillPatternSpan =  this.div.querySelector(".VisFillPatternSpan")
             let VisFillPatternCloseBtn = this.div.querySelector(".VisFillPatternCloseBtn")
             let FillVisInput = this.div.querySelector(".FillVisInput")
             let VisColorSpan =this.div.querySelector(".VisColorSpan")
@@ -94,8 +94,8 @@ class TrackOptions extends CommonParentUtils{
             })
             VisFillPatternCloseBtn.addEventListener("click",()=>{
                 Log(new Error(),"removing visualizer fill image from priority block with UUID ",this.UUID);
-                window.electronAPI.SignalToMain("ChangeValue",this.UUID,"VisualizerFillPatternPath","")
-                VisFillPatternSpan.style.display="none"
+                window.electronAPI.SignalToMain("ChangeValue",this.UUID,"VisualizerFillPatternPath","");
+                VisFillPatternSpan.style.display="none";
             })
             FillVisInput.addEventListener("change",()=>{
                 Log(new Error(),"setting visualizer fill enabled for priority block with UUID ",this.UUID, " to ", FillVisInput.checked);

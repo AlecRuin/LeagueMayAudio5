@@ -9,7 +9,7 @@ const {app} = require("electron");
 Number.prototype.clamp = function(min, max) {
     return Math.min(Math.max(this, min), max);
 };
-let mainWindow,Pixelmatch,visualizerWindow
+let mainWindow,Pixelmatch,visualizerWindow,PreventIndex
 let Threshold=0.2
 //scale value for border start: 0.9555
 const ScanningAbilityBorderLocations = [
@@ -346,7 +346,8 @@ let SETS={
     trackIdSet:new Set(),
     condIdSet:new Set(),
     outputIdSet:new Set(),
-    visualizerIdSet:new Set()
+    visualizerIdSet:new Set(),
+    postTrackOps:new Set()
 }
 let StopDebouncer=false
 class Script
@@ -753,117 +754,168 @@ class Script
     }
 
     
-    doOutputs(Block,BlockIndex,PreventIndex,window){
+    doOutputs(Block,BlockIndex,bIsPostOp){
         Log(new Error(),"DOING OUTPUTS");
-        if(PreventIndex>BlockIndex){
+        if(!bIsPostOp&&PreventIndex>BlockIndex){
             Log(new Error(),"STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
             return PreventIndex
         }
-        
-        for(let x=0;x<Block.outputArray.length;x++){
-            let Stop=false;
-            let Play,PlayAll,Prevent,Add,Sub,Set=false
-            let output=Block.outputArray[x]
+        let cap = (bIsPostOp)?Block.PostTrackOperations.length:Block.outputArray.length
+        for(let x=0;x<cap;x++){
+            let output=(bIsPostOp)?Block.PostTrackOperations[x]:Block.outputArray[x]
+            if(Block.Started==false)Block.Started=true;
+            if(!bIsPostOp)Block.changeStatus("playing");
             switch (output.cmd) {
                 case "stop":
-                    Stop=true;
+                    Log(new Error(),"ATTEMPTING TO STOP LOWER PRIORITY MUSIC MUSIC");
+                    for(let y=BlockIndex;y>=0;y--)this.Blocks[y].stopAllTracks();
                     break;
                 case "play":
-                    Play=true;
+                    Log(new Error(),"PLAYING TRACK");
+                    if(Block.Tracks.length>0){
+                        if(bIsPostOp)Block.changeStatus("playing");
+                        if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath});
+                        Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,visualizerWindow);
+                        Block.TrackIndex++;
+                        if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
+                    }else Log(new Error(),"NO TRACKS FOUND. SKIPPING");
                     break;
                 case "play-all":
-                    PlayAll=true;
+                    Log(new Error(),"PLAYING ALL TRACKS");
+                    for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
+                    if(bIsPostOp&&Block.Tracks.length>0)Block.changeStatus("playing");
                     break;
                 case "prevent":
-                    Prevent=true;
-                    break;
-                case "add":
-                    Add=true;
-                    break;
-                case "sub":
-                    Sub=true;
-                    break;
-                case "set":
-                    Set=true;
-                    break;
-                default:
-                    throw new Error("Output type isn't valid")
-                    break;
-            }
-            
-            if(Block.status=="scanning"||(Block.Started==false&&Block.startStatus=="playing"))
-            { 
-                if(Block.Started==false&&Block.startStatus=="playing")Block.Started=true;
-                if(Stop){
-                    Log(new Error(),"ATTEMPTING TO STOP MUSIC");
-                    for(let y=BlockIndex;y>=0;y--){
-                        Log(new Error(),"STOPPING ALL TRACKS");
-                        this.Blocks[y].stopAllTracks();
-                    }
-                }else{
-                    Log(new Error(),"TRACK NOT DESIGNED TO STOP OTHER MUSIC");
-                }
-                if(Prevent){
                     if(BlockIndex>=PreventIndex){
-                        {
-                            Log(new Error(),"SETTING PREVENTATIVE INDEX");
-                            PreventIndex=BlockIndex;
-                        }
+                        Log(new Error(),"SETTING PREVENTATIVE INDEX");
+                        PreventIndex=BlockIndex;
                     }
                     Block.PreventCallback=()=>{
                         Log(new Error(),"PreventCallback called");
                         Log(new Error(),"Block.status: ",Block.status);
                         if(Block.status!="playing")PreventIndex=0;
+                        Block.PreventCallback=undefined;
                     }
-                }
-                if(Play||PlayAll){
-                    Log(new Error(),"BLOCK SWITCHED TO PLAYING");
-                    // Block.changeStatus("playing");
-                    if(PlayAll)
-                    {
-                        Log(new Error(),"PLAYING ALL TRACKS");
-                        for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
-                    }else{
-                        Log(new Error(),"PLAYING TRACK");
-                        if(Block.Tracks.length>0)
-                        {
-                            if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
-                            StopDebouncer=true
-                            Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,window)
-                            StopDebouncer=false
-                            Block.TrackIndex++;
-                            if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
-                        }else{
-                            Log(new Error(),"NO TRACKS FOUND. SKIPPING");
-                        }
-                    }
-                }else{
-                    Log(new Error(),"BLOCK NOT DESIGNED FOR PLAYING");
-                }
-                if(Add){
-                    Log(new Error(),"BLOCK SWITCHED TO PLAYING. Adding Value");
-                    // Block.changeStatus("playing");
+                    break;
+                case "add":
+                    Log(new Error(),`Adding ${output.value} to ${output.stack}`);
                     Variables[output.stack]+=output.value;
-                    if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables})
-                }
-                if(Sub){
-                    Log(new Error(),"BLOCK SWITCHED TO PLAYING. Subtracting value");
-                    // Block.changeStatus("playing");
+                    if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
+                    Log(new Error(),"New variable value: ",Variables[output.stack]);
+                    break;
+                case "sub":
+                    Log(new Error(),`Subtracting ${output.value} from ${output.stack}`);
                     Variables[output.stack]-=output.value;
-                    if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables})
-                }
-                if(Set){
-                    Log(new Error(),"BLOCK SWITCHED TO PLAYING. Setting value");
-                    // Block.changeStatus("playing");
+                    if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
+                    Log(new Error(),"New variable value: ",Variables[output.stack]);
+                    break;
+                case "set":
+                    Log(new Error(),`Setting ${output.stack} to ${output.value}`);
                     Variables[output.stack]=output.value;
-                    if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables})
-                }
-
-            } else{
-                Log(new Error(),"BLOCK WAS ALREADY ACTIVE/DISABLED: ",Block.status);
+                    if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
+                    Log(new Error(),"New variable value: ",Variables[output.stack]);
+                    break;
+                default:
+                    throw new Error("Output type isn't valid")
+                    break;
             }
+            // let Stop=false;
+            // let Play,PlayAll,Prevent,Add,Sub,Set=false
+            // let output=(bIsPostOp)?Block.PostTrackOperations[x]:Block.outputArray[x]
+            // switch (output.cmd) {
+            //     case "stop":
+            //         Stop=true;
+            //         break;
+            //     case "play":
+            //         Play=true;
+            //         break;
+            //     case "play-all":
+            //         PlayAll=true;
+            //         break;
+            //     case "prevent":
+            //         Prevent=true;
+            //         break;
+            //     case "add":
+            //         Add=true;
+            //         break;
+            //     case "sub":
+            //         Sub=true;
+            //         break;
+            //     case "set":
+            //         Set=true;
+            //         break;
+            //     default:
+            //         throw new Error("Output type isn't valid")
+            //         break;
+            // }
+            
+            // if(Block.status=="scanning"||(Block.Started==false&&Block.startStatus=="playing"))
+            // { 
+            //     if(Block.Started==false&&Block.startStatus=="playing")Block.Started=true;
+            //     if(Stop||Prevent||Play||PlayAll||Add||Sub||Set)Block.changeStatus("playing");
+            //     if(Stop){
+            //         Log(new Error(),"ATTEMPTING TO STOP LOWER PRIORITY MUSIC MUSIC");
+            //         for(let y=BlockIndex;y>=0;y--){
+            //             this.Blocks[y].stopAllTracks();
+            //         }
+            //     }
+            //     if(Prevent){
+            //         if(BlockIndex>=PreventIndex){
+            //             {
+            //                 Log(new Error(),"SETTING PREVENTATIVE INDEX");
+            //                 PreventIndex=BlockIndex;
+            //             }
+            //         }
+            //         Block.PreventCallback=()=>{
+            //             Log(new Error(),"PreventCallback called");
+            //             Log(new Error(),"Block.status: ",Block.status);
+            //             if(Block.status!="playing")PreventIndex=0;
+            //         }
+            //     }
+            //     if(Play||PlayAll){
+            //         Log(new Error(),"BLOCK SWITCHED TO PLAYING");
+            //         if(PlayAll){
+            //             Log(new Error(),"PLAYING ALL TRACKS");
+            //             for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
+            //         }else{
+            //             Log(new Error(),"PLAYING TRACK");
+            //             if(Block.Tracks.length>0){
+            //                 if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath});
+            //                 StopDebouncer=true
+            //                 Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,visualizerWindow)
+            //                 StopDebouncer=false
+            //                 Block.TrackIndex++;
+            //                 if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
+            //             }else{
+            //                 Log(new Error(),"NO TRACKS FOUND. SKIPPING");
+            //             }
+            //         }
+            //     }
+            //     if(Add){
+            //         Log(new Error(),"Adding Value");
+            //         // Block.changeStatus("playing");
+            //         Variables[output.stack]+=output.value;
+            //         if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
+            //         Log(new Error(),"New variable values: ",Variables);
+            //     }
+            //     if(Sub){
+            //         Log(new Error(),"Subtracting value");
+            //         // Block.changeStatus("playing");
+            //         Variables[output.stack]-=output.value;
+            //         if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
+            //         Log(new Error(),"New variable values: ",Variables);
+            //     }
+            //     if(Set){
+            //         Log(new Error(),"Setting value");
+            //         // Block.changeStatus("playing");
+            //         Variables[output.stack]=output.value;
+            //         if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
+            //         Log(new Error(),"New variable values: ",Variables);
+            //     }  
+            // } else{
+            //     Log(new Error(),"BLOCK WAS ALREADY ACTIVE/DISABLED: ",Block.status);
+            // }
         }
-        Block.changeStatus("playing");
         return PreventIndex
     }
     async startScanning(window,MainWindow)
@@ -882,64 +934,72 @@ class Script
         if (this.scanningThread)clearInterval(this.scanningThread);
         //calculate the required pixel coords, if applicable
         await this.updateScaleFactor()
-        let PreventIndex=0
+        PreventIndex=0
+        for(let BlockIndex=this.Blocks.length-1;BlockIndex>=0;BlockIndex--){
+            this.Blocks[BlockIndex].BlockIndex=BlockIndex;
+            this.Blocks[BlockIndex].PostOpCallback=this.doOutputs
+        }
         this.scanningThread = setInterval(()=>{
             //iterate through each block, and get the coord
             //insert evil ass rape scanner
             for(let BlockIndex=this.Blocks.length-1;BlockIndex>=0;BlockIndex--){
                 let Block = this.Blocks[BlockIndex]
+                Block.BlockIndex=BlockIndex
                 this.checkImageScan(Block).then(result=>{
                     if(result)
                     {
-                        PreventIndex=this.doOutputs(Block,BlockIndex,PreventIndex,window)
+                        PreventIndex=this.doOutputs(Block,BlockIndex)
                     }else{
                         // Log(new Error(),"CONDITION WAS NOT MET");
                     }
                     for(let z=0;z<Block.conditionalArray.length;z++){
                         let Cond = Block.conditionalArray[z]
-                        let ConditionalMet=false
-                        switch (Cond.condOperator) {
-                            case "==":
-                                if(Variables[Cond.condStack]==Cond.condInput)ConditionalMet=true;
-                                break;
-                            case ">=":
-                                if(Variables[Cond.condStack]>=Cond.condInput)ConditionalMet=true;
-                                break;
-                            case "<=":
-                                if(Variables[Cond.condStack]<=Cond.condInput)ConditionalMet=true;
-                                break;
-                            case "<":
-                                if(Variables[Cond.condStack]<Cond.condInput)ConditionalMet=true;
-                                break;
-                            case ">":
-                                if(Variables[Cond.condStack]>Cond.condInput)ConditionalMet=true;
-                                break;
-                        }
-                        if (ConditionalMet){
-                            Log(new Error(),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
-                            Log(new Error(),"Block.Status: ",Block.status);
-                            Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
-                            if(PreventIndex<=BlockIndex)
-                            {
-                                // Log(new Error(),"block: ",Block.status);
-                                if(Block.status!="playing"){Log(new Error(),"BLOCK IS NO LONGER ACTIVE");}
-                                if(Block.status=="playing"&&Cond.condOutput!="playing"){
-                                    Log(new Error(),"STOP THAT SHIT RN");   
-                                    Block.stopAllTracks()
-                                }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
-                                    Log(new Error(),"PLAY THAT SHIT RN");
-                                    if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
-                                    this.doOutputs(Block,BlockIndex,PreventIndex,window)
-                                }else if(Block.status!=Cond.condOutput)
+                        if(Cond.condOperator==""||Cond.condOutput==""||Cond.condStack==""){
+                            Log(new Error(),"Condition is missing either its operator, stack, or output. Skipping")
+                        }else{
+                            let ConditionalMet=false
+                            switch (Cond.condOperator) {
+                                case "==":
+                                    if(Variables[Cond.condStack]==Cond.condInput)ConditionalMet=true;
+                                    break;
+                                case ">=":
+                                    if(Variables[Cond.condStack]>=Cond.condInput)ConditionalMet=true;
+                                    break;
+                                case "<=":
+                                    if(Variables[Cond.condStack]<=Cond.condInput)ConditionalMet=true;
+                                    break;
+                                case "<":
+                                    if(Variables[Cond.condStack]<Cond.condInput)ConditionalMet=true;
+                                    break;
+                                case ">":
+                                    if(Variables[Cond.condStack]>Cond.condInput)ConditionalMet=true;
+                                    break;
+                                default:
+                                    Log(new Error(),"no conditional operator provided")
+                                    break;
+                            }
+                            if (ConditionalMet){
+                                Log(new Error(),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
+                                if(PreventIndex<=BlockIndex)
                                 {
-                                    Log(new Error(),"Block.Status: ",Block.status);
-                                    Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
-                                    Block.status==Cond.condOutput
+                                    // Log(new Error(),"block: ",Block.status);
+                                    if(Block.status!="playing"){Log(new Error(),"BLOCK IS NO LONGER ACTIVE");}
+                                    if(Block.status=="playing"&&Cond.condOutput!="playing"){
+                                        Log(new Error(),"STOP THAT SHIT RN");   
+                                        Block.stopAllTracks()
+                                    }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
+                                        Log(new Error(),"PLAY THAT SHIT RN");
+                                        if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
+                                        this.doOutputs(Block,BlockIndex)
+                                    }else if(Block.status!=Cond.condOutput)
+                                    {
+                                        Log(new Error(),"Block.Status: ",Block.status);
+                                        Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
+                                        Block.status==Cond.condOutput
+                                    }
                                 }else{
-                                    Log(new Error(),"SOMETHING IS SERIOUSLY WRONG WITH THE CONDITIONAL LOGIC!!");
+                                    Log(new Error(),"ACTION STOPPED DUE TO PREVENTION");
                                 }
-                            }else{
-                                Log(new Error(),"ACTION STOPPED DUE TO PREVENTION");
                             }
                         }
                     }
@@ -957,7 +1017,7 @@ class Script
         {
             let Block = this.Blocks[x]
             Block.stopAllTracks()
-            Block.status=Block.startStatus
+            Block.status="scanning"
             Block.Started=false;
         }
         //reset all vars to default values
@@ -1027,9 +1087,8 @@ class Block
         this.FadeOutDuration =(options&&options.FadeOutDuration)?options.FadeOutDuration:1;
         this.bIsRandom = (options&&options.bIsRandom)?options.bIsRandom:false;
         this.blockType=(options&&options.blockType)?options.blockType:"image-scan";
-        this.status = (options&&options.startStatus)?options.startStatus:"scanning"
+        this.status = "scanning"
         this.startStatus=(options&&options.startStatus)?options.startStatus:"scanning"
-        this.bShouldInterrupt = (options&&options.interrupt)?options.bShouldInterrupt:true;
         this.spellSlot = (options&&options.spellSlot)?options.spellSlot:4;
         this.scanLocation = (options&&options.scanLocation)?options.scanLocation:"border-start";
         this.scanCustomLocation =(options&&options.scanCustomLocation)?options.scanCustomLocation:[]//X,Y
@@ -1057,15 +1116,24 @@ class Block
         this.ScanWidth,
         this.ScanHeight,
         this.PreventCallback;
+        this.PostTrackOperations = (options&&options.PostTrackOperations)?options.PostTrackOperations:[]
+        this.PostOpCallback
+        this.BlockIndex
     }
     changeStatus(newStatus)
     {
         Log(new Error(),"old status: ",this.status);
+        let bDoOperationsFlag=false
+        if(this.status=="playing"&&newStatus=="scanning"){
+            Log(new Error(),"Post Operation conditions met")
+            bDoOperationsFlag=true
+        }
         this.status=newStatus
         let Blocks=[{UUID:this.UUID,status:this.status}]
         mainWindow.send("UpdateValues",{Blocks:Blocks})
         Log(new Error(),"new status: ",this.status);
-        if(this.PreventCallback)this.PreventCallback()
+        if(this.PreventCallback)this.PreventCallback();
+        if(bDoOperationsFlag&&this.PostOpCallback){Log(new Error(),"Attempting to perform post track operations"); this.PostOpCallback(this,this.BlockIndex,true);}
     }
     checkStatus(){
         for(let x=0;x<this.Tracks.length;x++){
@@ -1100,6 +1168,7 @@ class Block
      */
     removeTrack(UUID)
     {
+        console.log("UUID: ",UUID);
         this.Tracks=this.Tracks.filter(track=>track.UUID!==UUID)
         Log(new Error(),"this.Tracks: ",this.Tracks);
     }
@@ -1110,19 +1179,15 @@ class Block
             bIsFadeOut:this.bIsFadeOut,
             FadeOutDuration:this.FadeOutDuration,
             bIsRandom:this.bIsRandom,
-            bShouldInterrupt:this.bShouldInterrupt,
             spellSlot:this.spellSlot,
             scanColorType:this.scanColorType,
             scanColorCustomRGB:this.scanColorCustomRGB,
             scanCustomLocation:this.scanCustomLocation,
             scanLocation:this.scanLocation,
             confidence:this.confidence,
-            // output:this.output,
             startStatus:this.startStatus,
             blockType:this.blockType,
             outputArray:this.outputArray,
-            // outputStack:this.outputStack,
-            // outputModifier:this.outputModifier,
             ScanImagePath:this.ScanImagePath,
             conditionalArray:this.conditionalArray,
             scanType:this.scanType,
@@ -1132,6 +1197,7 @@ class Block
             bFillVisualizer:this.bFillVisualizer,
             VisualizerFillColor:this.VisualizerFillColor,
             VisualizerFillPatternPath:this.VisualizerFillPatternPath,
+            PostTrackOperations:this.PostTrackOperations,
             Tracks:this.Tracks.map((item)=>{
                 return item.toJSON()
             })
@@ -1159,12 +1225,22 @@ class Track
             TrackURL:this.TrackURL
         }
     }
+    cleanupTrack(){
+        if(!this.status=="inactive"){
+            this.status="inactive";
+            this.ParentBlock.checkStatus()
+            if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
+            this.FadeOutThread=undefined;
+            this.GainNode=undefined;
+            this.Source=undefined;
+        }
+    }
     stopTrack()
     {
         function realStop(Self)
         {
             Log(new Error(),"Stopping track...");
-            if(Self.status=="inactive"){Log("Track is inactive. Skipping");return;}
+            if(Self.status=="inactive"){Log(new Error(),"Track is inactive. Skipping");return;}
             if(Self.ParentBlock.bIsFadeOut)
             {
                 Log(new Error(),"Fadding out...");
@@ -1271,45 +1347,37 @@ class Track
                     AsyncTween(this.GainNode,0,1,this.ParentBlock.FadeInDuration*1000)
                 }
             this.status="active"
-            Log(new Error(),"this.status: ",this.status);
-            this.Source.onended = ()=>{
-                Log(new Error(),"song ended");
-                this.status="inactive"
-                this.ParentBlock.checkStatus()
-                if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
-                this.FadeOutThread=undefined;
-                this.GainNode=undefined;
-                this.Source=undefined;
-            }
-            if(this.ParentBlock.bIsFadeOut&&this.ParentBlock.FadeOutDuration<=this.TrackDuration)
-            {
+            Log(new Error(),"Switch track to active");
+            if(this.ParentBlock.bIsFadeOut&&this.ParentBlock.FadeOutDuration<=this.TrackDuration){
                 Log(new Error(),"FADING SONG OUT IN ",(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000," MS")
                 this.FadeOutThread = setTimeout(()=>{
                     Log(new Error(),"FADING SONG OUT")
                     AsyncTween(this.GainNode,1,0,this.ParentBlock.FadeOutDuration*1000).then(()=>{
                         Log(new Error(),"Song over?");
                         try {
-                            Self.Source.stop();
-                            Self.Source.disconnect();
+                            this.Source.stop();
+                            this.Source.disconnect();
                         } catch (error) {
                             Log(new Error(),"Source hasnt started yet");
                         }
-                        Self.status="inactive"
-                        Self.ParentBlock.checkStatus()
+                        this.status="inactive"
+                        this.ParentBlock.checkStatus()
                         // this.ParentBlock.status="scanning"
-                        if(Self.FadeOutThread)clearTimeout(Self.FadeOutThread);
-                        if(Self.VisualizerThread){
+                        if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
+                        if(this.VisualizerThread){
                             Log(new Error(),"stopping visualizer");
-                            clearInterval(Self.VisualizerThread);
-                            Self.VisualizerThread=undefined;
-                            Self.visualizerWindow.send("stop-visualizer")
+                            clearInterval(this.VisualizerThread);
+                            this.VisualizerThread=undefined;
+                            this.visualizerWindow.send("stop-visualizer")
                         }
-                        Self.FadeOutThread=undefined;
-                        Self.GainNode=undefined;
-                        Self.Source=undefined;
-                        Self.VisualizerThread=undefined;
+                        this.FadeOutThread=undefined;
+                        this.GainNode=undefined;
+                        this.Source=undefined;
+                        this.VisualizerThread=undefined;
                     })
                 },(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000)
+            }else{
+                this.Source.onended = this.cleanupTrack
             }
             this.ThreadBusy=false
             return

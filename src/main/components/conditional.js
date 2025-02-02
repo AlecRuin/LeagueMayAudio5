@@ -45,6 +45,7 @@ class Conditional extends CommonParentUtils{
                 <option ${(this.options&&this.options.condOutput=="scanning")?"selected":""}>scanning</option>
                 <option ${(this.options&&this.options.condOutput=="inactive")?"selected":""}>inactive</option>
             </select>
+            mode.
             <button class="CondCloseBtn">X</button>
             `
             let CondOutputSelect=this.div.querySelector(".CondOutputSelect")
