@@ -5,12 +5,12 @@ const fs = require("fs")
 const robot=require("robotjs")
 const sharp = require("sharp")
 const {Log} = require("./logging.js")
-const {app} = require("electron");
+const {app, dialog} = require("electron");
 Number.prototype.clamp = function(min, max) {
     return Math.min(Math.max(this, min), max);
 };
 let mainWindow,Pixelmatch,visualizerWindow,PreventIndex
-let Threshold=0.2
+let Threshold=0.15
 //scale value for border start: 0.9555
 const ScanningAbilityBorderLocations = [
     {
@@ -366,7 +366,8 @@ class Script
         this.heartbeat=5
         this.leagueDir=LeagueDir
         this.#selectedScreen=SelectedScreen
-        Pixelmatch=pixelmatch
+        if(pixelmatch)Pixelmatch=pixelmatch;
+        else console.error("PixelMatch is missing");
     }
     scaleCoord(coord,screenDimensions)
     {
@@ -390,10 +391,12 @@ class Script
     {
         if(this.leagueDir)fs.unwatchFile(path.join(this.leagueDir,"Config","PersistedSettings.json"))
         this.leagueDir=LeagueDir
-        let data = fs.readFileSync(path.join(this.leagueDir,"Config","PersistedSettings.json"))
-        this.scaleFactor=JSON.parse(data).files[0].sections[5].settings[16].value
-        Log(new Error(),"scaleFactor: ",this.scaleFactor);
-        fs.watchFile(path.join(this.leagueDir,"Config","PersistedSettings.json"),()=>{this.updateScaleFactor()})
+        if(this.leagueDir&&fs.existsSync(path.join(this.leagueDir,"Config","PersistedSettings.json"))){
+            let data = fs.readFileSync(path.join(this.leagueDir,"Config","PersistedSettings.json"))
+            this.scaleFactor=JSON.parse(data).files[0].sections[5].settings[16].value
+            Log(new Error(),"scaleFactor: ",this.scaleFactor);
+            fs.watchFile(path.join(this.leagueDir,"Config","PersistedSettings.json"),()=>{this.updateScaleFactor()})
+        }else Log(new Error(),"League directory is invalid");
     }
     /**
      * 
@@ -487,7 +490,7 @@ class Script
                             Log(new Error(),"X,Y,Scale: ",X,Y,Scale);
                             Block.ScanWidth=Scale
                             Block.ScanHeight=Scale
-
+                            if(!fs.existsSync(Block.ScanImagePath))throw new Error("Scan reference image is missing")
                             let {data,info} = await sharp(Block.ScanImagePath).resize(Scale,Scale).ensureAlpha().raw().toBuffer({resolveWithObject:true})
                             Block.ScanImageBuffer=data
                             Log(new Error(),"ScanWidth and ScanHeight: ",Block.ScanWidth,Block.ScanHeight);
@@ -525,9 +528,13 @@ class Script
     
     async checkImageScan(Block,bIsTesting,BlockIndex){
         try {
+            if(Block.status=="playing")return Promise.resolve(false);
             // let Block = this.Blocks[BlockIndex]
+            if(PreventIndex>BlockIndex){
+                //Skipping scan due to preventative index
+                return Promise.resolve(false)
+            }
             let conditionMet=false
-            //if(Block.status=="playing"&&(Block.output=="stop-prevent-and-play"||Block.output=="stop-prevent-and-play-all"))PreventIndex=BlockIndex;
             if(!bIsTesting&&Block.startStatus=="playing"&&!Block.Started)
             {
                 Log(new Error(),"BLOCK STARTS ACTIVE");
@@ -566,6 +573,7 @@ class Script
                             return Promise.resolve(conditionMet)
                         }
                     }else if(Block.scanType=="image"){
+                        if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer");
                         //Do image scanning tech for icons
                         if (bIsTesting) {
                             await sharp(Block.ScanImageBuffer, {raw: {width: 64,height: 64,channels: 4}})
@@ -590,7 +598,7 @@ class Script
                             }
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
                         } else {
-                            return CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight).then((ImageCaptureBuffer) =>{
+                            return CaptureRegionToBuffer(Block.targetLocation.X,Block.targetLocation.Y,Block.ScanWidth,Block.ScanHeight,64,64).then((ImageCaptureBuffer) =>{
                                 conditionMet=CompareImageBuffers(Block.ScanImageBuffer,ImageCaptureBuffer,Block.confidence)
                                 if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
                                 return conditionMet;
@@ -639,6 +647,7 @@ class Script
                             return Promise.resolve(false)
                         }
                     }else if(Block.scanType){
+                        if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer");
                         //crazy ass buff location with image comparison
                         if(bIsTesting){
                             let ScanData=[]
@@ -646,6 +655,7 @@ class Script
                             .toFormat('png')
                             .toFile(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"TemplateImage.png"));
                             for (let x=0;x<Block.targetLocation.length;x++){
+                                if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer");
                                 let ImageCaptureBuffer = await CaptureRegionToBuffer(Block.targetLocation[x].X,Block.targetLocation[x].Y,Block.ScanWidth,Block.ScanHeight)     
                                 await sharp(ImageCaptureBuffer,{raw:{width:Block.ScanWidth,height:Block.ScanHeight,channels:4}})
                                 .toFormat("png")
@@ -662,11 +672,15 @@ class Script
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(ScanData,null," "))
                         }else{
                             for(let x=0;x<Block.targetLocation.length;x++){
+                                if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer")
                                 let ImageCaptureBuffer=await CaptureRegionToBuffer(Block.targetLocation[x].X,Block.targetLocation[x].Y,Block.ScanWidth,Block.ScanHeight)
                                 const diff = Buffer.alloc(ImageCaptureBuffer.length)
                                 const NumOfMismatch = Pixelmatch(Block.ScanImageBuffer,ImageCaptureBuffer,diff,Block.ScanWidth,Block.ScanHeight,{diffMask:true,threshold:Threshold})
                                 let Similarity = 1-getAlpha(NumOfMismatch,0,Block.ScanWidth*Block.ScanHeight)
-                                if(Similarity>=Block.confidence)return Promise.resolve(true);
+                                if(Similarity>=Block.confidence){
+                                    if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
+                                    return Promise.resolve(true);
+                                }
                             }
                             return Promise.resolve(false);
                         }
@@ -703,6 +717,7 @@ class Script
                             return Promise.resolve(conditionMet)
                         }
                     }else if(Block.scanType){
+                        if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer");
                         //crazy ass custom location with image comparison
                         if(bIsTesting){
                             sharp(Block.ScanImageBuffer, {raw: {width: Block.ScanWidth,height: Block.ScanHeight,channels: 4}})
@@ -755,45 +770,60 @@ class Script
 
     
     doOutputs(Block,BlockIndex,bIsPostOp){
-        Log(new Error(),"DOING OUTPUTS");
+        if(Block.status=="playing")return PreventIndex;
+        Log(new Error(),"#"+BlockIndex,": ","DOING OUTPUTS");
         if(!bIsPostOp&&PreventIndex>BlockIndex){
-            Log(new Error(),"STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
+            Log(new Error(),"#"+BlockIndex,": ","STOPPED BY PREVENTATIVE INDEX: ",PreventIndex);
             return PreventIndex
         }
         let cap = (bIsPostOp)?Block.PostTrackOperations.length:Block.outputArray.length
         for(let x=0;x<cap;x++){
             let output=(bIsPostOp)?Block.PostTrackOperations[x]:Block.outputArray[x]
             if(Block.Started==false)Block.Started=true;
-            if(!bIsPostOp)Block.changeStatus("playing");
+            if(!bIsPostOp){
+                Log(new Error(),`#${BlockIndex}: Changing block status to playing`)
+                Block.changeStatus("playing");
+            }
             switch (output.cmd) {
                 case "stop":
-                    Log(new Error(),"ATTEMPTING TO STOP LOWER PRIORITY MUSIC MUSIC");
-                    for(let y=BlockIndex;y>=0;y--)this.Blocks[y].stopAllTracks();
+                    Log(new Error(),"#"+BlockIndex,": ","ATTEMPTING TO STOP LOWER PRIORITY MUSIC MUSIC");
+                    if(BlockIndex>0)for(let y=BlockIndex-1;y>=0;y--)this.Blocks[y].stopAllTracks();
                     break;
                 case "play":
-                    Log(new Error(),"PLAYING TRACK");
+                    Log(new Error(),"#"+BlockIndex,": ","PLAYING TRACK");
                     if(Block.Tracks.length>0){
-                        if(bIsPostOp)Block.changeStatus("playing");
+                        if(bIsPostOp){
+                            Log(new Error(),`#${BlockIndex}: Changing block status to playing`)
+                            Block.changeStatus("playing");
+                        }
                         if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath});
                         Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,visualizerWindow);
                         Block.TrackIndex++;
                         if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
-                    }else Log(new Error(),"NO TRACKS FOUND. SKIPPING");
+                    }else Log(new Error(),"#"+BlockIndex,": ","NO TRACKS FOUND. SKIPPING");
                     break;
                 case "play-all":
-                    Log(new Error(),"PLAYING ALL TRACKS");
+                    Log(new Error(),"#"+BlockIndex,": ","PLAYING ALL TRACKS");
                     for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
-                    if(bIsPostOp&&Block.Tracks.length>0)Block.changeStatus("playing");
+                    if(bIsPostOp&&Block.Tracks.length>0){
+                        Log(new Error(),`#${BlockIndex}: Changing block status to playing`)
+                        Block.changeStatus("playing");
+                    }
                     break;
                 case "prevent":
                     if(BlockIndex>=PreventIndex){
-                        Log(new Error(),"SETTING PREVENTATIVE INDEX");
+                        Log(new Error(),"#"+BlockIndex,": ","SETTING PREVENTATIVE INDEX");
                         PreventIndex=BlockIndex;
                     }
                     Block.PreventCallback=()=>{
                         Log(new Error(),"PreventCallback called");
                         Log(new Error(),"Block.status: ",Block.status);
-                        if(Block.status!="playing")PreventIndex=0;
+                        if(Block.status!="playing"&&BlockIndex>=PreventIndex){
+                            PreventIndex=0;
+                            Log(new Error(),"#"+BlockIndex,": ","Block was playing and its index greater/equal to PreventIndex. Resetting PreventIndex")
+                        }else if(Block.status=="playing"){
+                            Log(new Error(),"#"+BlockIndex,": ","Block was still playing")
+                        }
                         Block.PreventCallback=undefined;
                     }
                     break;
@@ -819,102 +849,6 @@ class Script
                     throw new Error("Output type isn't valid")
                     break;
             }
-            // let Stop=false;
-            // let Play,PlayAll,Prevent,Add,Sub,Set=false
-            // let output=(bIsPostOp)?Block.PostTrackOperations[x]:Block.outputArray[x]
-            // switch (output.cmd) {
-            //     case "stop":
-            //         Stop=true;
-            //         break;
-            //     case "play":
-            //         Play=true;
-            //         break;
-            //     case "play-all":
-            //         PlayAll=true;
-            //         break;
-            //     case "prevent":
-            //         Prevent=true;
-            //         break;
-            //     case "add":
-            //         Add=true;
-            //         break;
-            //     case "sub":
-            //         Sub=true;
-            //         break;
-            //     case "set":
-            //         Set=true;
-            //         break;
-            //     default:
-            //         throw new Error("Output type isn't valid")
-            //         break;
-            // }
-            
-            // if(Block.status=="scanning"||(Block.Started==false&&Block.startStatus=="playing"))
-            // { 
-            //     if(Block.Started==false&&Block.startStatus=="playing")Block.Started=true;
-            //     if(Stop||Prevent||Play||PlayAll||Add||Sub||Set)Block.changeStatus("playing");
-            //     if(Stop){
-            //         Log(new Error(),"ATTEMPTING TO STOP LOWER PRIORITY MUSIC MUSIC");
-            //         for(let y=BlockIndex;y>=0;y--){
-            //             this.Blocks[y].stopAllTracks();
-            //         }
-            //     }
-            //     if(Prevent){
-            //         if(BlockIndex>=PreventIndex){
-            //             {
-            //                 Log(new Error(),"SETTING PREVENTATIVE INDEX");
-            //                 PreventIndex=BlockIndex;
-            //             }
-            //         }
-            //         Block.PreventCallback=()=>{
-            //             Log(new Error(),"PreventCallback called");
-            //             Log(new Error(),"Block.status: ",Block.status);
-            //             if(Block.status!="playing")PreventIndex=0;
-            //         }
-            //     }
-            //     if(Play||PlayAll){
-            //         Log(new Error(),"BLOCK SWITCHED TO PLAYING");
-            //         if(PlayAll){
-            //             Log(new Error(),"PLAYING ALL TRACKS");
-            //             for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
-            //         }else{
-            //             Log(new Error(),"PLAYING TRACK");
-            //             if(Block.Tracks.length>0){
-            //                 if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath});
-            //                 StopDebouncer=true
-            //                 Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,visualizerWindow)
-            //                 StopDebouncer=false
-            //                 Block.TrackIndex++;
-            //                 if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
-            //             }else{
-            //                 Log(new Error(),"NO TRACKS FOUND. SKIPPING");
-            //             }
-            //         }
-            //     }
-            //     if(Add){
-            //         Log(new Error(),"Adding Value");
-            //         // Block.changeStatus("playing");
-            //         Variables[output.stack]+=output.value;
-            //         if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
-            //         Log(new Error(),"New variable values: ",Variables);
-            //     }
-            //     if(Sub){
-            //         Log(new Error(),"Subtracting value");
-            //         // Block.changeStatus("playing");
-            //         Variables[output.stack]-=output.value;
-            //         if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
-            //         Log(new Error(),"New variable values: ",Variables);
-            //     }
-            //     if(Set){
-            //         Log(new Error(),"Setting value");
-            //         // Block.changeStatus("playing");
-            //         Variables[output.stack]=output.value;
-            //         if(mainWindow)mainWindow.send("UpdateValues",{Variables:Variables});
-            //         Log(new Error(),"New variable values: ",Variables);
-            //     }  
-            // } else{
-            //     Log(new Error(),"BLOCK WAS ALREADY ACTIVE/DISABLED: ",Block.status);
-            // }
         }
         return PreventIndex
     }
@@ -935,19 +869,23 @@ class Script
         //calculate the required pixel coords, if applicable
         await this.updateScaleFactor()
         PreventIndex=0
+        const audioContext=new AudioContext()
         for(let BlockIndex=this.Blocks.length-1;BlockIndex>=0;BlockIndex--){
             this.Blocks[BlockIndex].BlockIndex=BlockIndex;
             this.Blocks[BlockIndex].PostOpCallback=this.doOutputs
+            for(let x=0;x<this.Blocks[BlockIndex].Tracks.length;x++){
+                this.Blocks[BlockIndex].Tracks[x].TrackDuration=await getTrackLength(audioContext,this.Blocks[BlockIndex].Tracks[x].TrackURL)
+            }
         }
         this.scanningThread = setInterval(()=>{
             //iterate through each block, and get the coord
             //insert evil ass rape scanner
             for(let BlockIndex=this.Blocks.length-1;BlockIndex>=0;BlockIndex--){
                 let Block = this.Blocks[BlockIndex]
-                Block.BlockIndex=BlockIndex
-                this.checkImageScan(Block).then(result=>{
+                this.checkImageScan(Block,false,BlockIndex).then(result=>{
                     if(result)
                     {
+                        Log(new Error(),"#",BlockIndex,": Condition met. Doing outputs")
                         PreventIndex=this.doOutputs(Block,BlockIndex)
                     }else{
                         // Log(new Error(),"CONDITION WAS NOT MET");
@@ -955,7 +893,7 @@ class Script
                     for(let z=0;z<Block.conditionalArray.length;z++){
                         let Cond = Block.conditionalArray[z]
                         if(Cond.condOperator==""||Cond.condOutput==""||Cond.condStack==""){
-                            Log(new Error(),"Condition is missing either its operator, stack, or output. Skipping")
+                            Log(new Error(),"Condition is missing either its operator, stack, or output. Skipping: ",Cond)
                         }else{
                             let ConditionalMet=false
                             switch (Cond.condOperator) {
@@ -979,23 +917,26 @@ class Script
                                     break;
                             }
                             if (ConditionalMet){
-                                Log(new Error(),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");  
+                                // Log(new Error(),"CONDITION HAS BEEN MET IN CONDITIONAL ARRAY");
                                 if(PreventIndex<=BlockIndex)
                                 {
                                     // Log(new Error(),"block: ",Block.status);
-                                    if(Block.status!="playing"){Log(new Error(),"BLOCK IS NO LONGER ACTIVE");}
+                                    // if(Block.status!="playing"){Log(new Error(),"BLOCK IS NO LONGER ACTIVE");}
                                     if(Block.status=="playing"&&Cond.condOutput!="playing"){
                                         Log(new Error(),"STOP THAT SHIT RN");   
+                                        Log(new Error(),"Block.Status: ",Block.status);
+                                        Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
+                                        Log(new Error(),`#${BlockIndex}: Changing block status to ${Cond.condOutput}`)
+                                        Block.changeStatus(Cond.condOutput)
                                         Block.stopAllTracks()
                                     }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
-                                        Log(new Error(),"PLAY THAT SHIT RN");
+                                        Log(new Error(),"CONDITION MET. DOING OUTPUTS");
                                         if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
                                         this.doOutputs(Block,BlockIndex)
                                     }else if(Block.status!=Cond.condOutput)
                                     {
-                                        Log(new Error(),"Block.Status: ",Block.status);
-                                        Log(new Error(),"Cond.condOutput: ",Cond.condOutput);
-                                        Block.status==Cond.condOutput
+                                        Log(new Error(),`#${BlockIndex}: Changing block status to ${Cond.condOutput}`)
+                                        Block.changeStatus(Cond.condOutput)
                                     }
                                 }else{
                                     Log(new Error(),"ACTION STOPPED DUE TO PREVENTION");
@@ -1013,12 +954,16 @@ class Script
     {
         //stop all music
         //reset all blocks to default value
+        if (this.scanningThread)clearInterval(this.scanningThread);
         for(let x=0;x<this.Blocks.length;x++)
         {
             let Block = this.Blocks[x]
             Block.stopAllTracks()
             Block.status="scanning"
             Block.Started=false;
+            Block.TrackIndex=0;
+            Block.ScanImageBuffer=undefined
+            Block.PostOpCallback=undefined
         }
         //reset all vars to default values
         Variables = {...VariableReset}
@@ -1030,7 +975,6 @@ class Script
             }
             mainWindow.send("UpdateValues",{Blocks:Blocks,Variables:Variables})
         }
-        if (this.scanningThread)clearInterval(this.scanningThread);
         this.scanningThread=undefined
         visualizerWindow.send("stop-visualizer")
     }
@@ -1122,27 +1066,36 @@ class Block
     }
     changeStatus(newStatus)
     {
-        Log(new Error(),"old status: ",this.status);
+        Log(new Error(),"#",(this.BlockIndex!=undefined)?this.BlockIndex:"UNKNOWN: ","old status, new status: ",this.status,newStatus);
         let bDoOperationsFlag=false
-        if(this.status=="playing"&&newStatus=="scanning"){
+        if(this.status=="playing"&&newStatus=="scanning"&&this.PostTrackOperations.length>0){
             Log(new Error(),"Post Operation conditions met")
             bDoOperationsFlag=true
+        } 
+        if(this.status!=newStatus){
+            this.status=newStatus
+            let Blocks=[{UUID:this.UUID,status:this.status}]
+            mainWindow.send("UpdateValues",{Blocks:Blocks})
+            if(this.PreventCallback)this.PreventCallback();
+            if(bDoOperationsFlag&&this.PostOpCallback){Log(new Error(),"Attempting to perform post track operations"); this.PostOpCallback(this,this.BlockIndex,true);}
         }
-        this.status=newStatus
-        let Blocks=[{UUID:this.UUID,status:this.status}]
-        mainWindow.send("UpdateValues",{Blocks:Blocks})
-        Log(new Error(),"new status: ",this.status);
-        if(this.PreventCallback)this.PreventCallback();
-        if(bDoOperationsFlag&&this.PostOpCallback){Log(new Error(),"Attempting to perform post track operations"); this.PostOpCallback(this,this.BlockIndex,true);}
     }
     checkStatus(){
+        Log(new Error(),"#",(this.BlockIndex)?this.BlockIndex:"UNKNOWN: ","checking status of block")
         for(let x=0;x<this.Tracks.length;x++){
             if(this.Tracks[x].status!="inactive")return;
         }
-        this.changeStatus("scanning")
+        if(this.status=="playing"){
+            Log(new Error(),`#${this.BlockIndex}: Changing block status to scanning`);
+            this.changeStatus("scanning");
+        }else {
+            Log(new Error(),`#${this.BlockIndex}: Changing block status to ${this.status}`);
+            this.changeStatus(this.status);
+        }
     }
     stopAllTracks()
     {
+        Log(new Error(),"#"+(this.BlockIndex)?this.BlockIndex:"UNKNOWN: ","Stopping all tracks within block")
         if(this.Tracks.length>0){
             this.Tracks.forEach((element)=>{
                 element.stopTrack()
@@ -1170,7 +1123,9 @@ class Block
     {
         console.log("UUID: ",UUID);
         this.Tracks=this.Tracks.filter(track=>track.UUID!==UUID)
-        Log(new Error(),"this.Tracks: ",this.Tracks);
+        let DeRefTracks=[...this.Tracks]
+        DeRefTracks.forEach(Track=>Track.ParentBlock=undefined)
+        Log(new Error(),"this.Tracks: ",DeRefTracks);
     }
     toJSON(){
         return{
@@ -1219,48 +1174,65 @@ class Track
         this.TrackDuration=0
         this.visualizerWindow
         this.ThreadBusy=false
+        this.stoppingThread
     }
     toJSON(){
         return{
-            TrackURL:this.TrackURL
+            TrackURL:this.TrackURL,
+            UUID:this.UUID
         }
     }
     cleanupTrack(){
+        Log(new Error(),this.TrackURL.split(/[/\\]/).pop(),": Cleaning up track")
         if(!this.status=="inactive"){
             this.status="inactive";
-            this.ParentBlock.checkStatus()
             if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
             this.FadeOutThread=undefined;
             this.GainNode=undefined;
             this.Source=undefined;
+            this.ParentBlock.checkStatus()
+        }
+        if(this.VisualizerThread){
+            Log(new Error(),this.TrackURL.split(/[/\\]/).pop(),": stopping visualizer");
+            clearInterval(this.VisualizerThread);
+            this.VisualizerThread=undefined;
+            visualizerWindow.send("stop-visualizer")
         }
     }
     stopTrack()
     {
         function realStop(Self)
         {
-            Log(new Error(),"Stopping track...");
-            if(Self.status=="inactive"){Log(new Error(),"Track is inactive. Skipping");return;}
+            Log(new Error(),`Stopping track ${Self.TrackURL}...`);
+            if(Self.status=="inactive"){
+                Log(new Error(),Self.TrackURL.split(/[/\\]/).pop(),": Track is inactive. Skipping");
+                console.log(Self.stoppingThread)
+                if(Self.stoppingThread){
+                    clearInterval(Self.stoppingThread);
+                    Self.stoppingThread=undefined;
+                }
+               return;
+            }
             if(Self.ParentBlock.bIsFadeOut)
             {
-                Log(new Error(),"Fadding out...");
+                Log(new Error(),Self.TrackURL.split(/[/\\]/).pop(),": Fadding out...");
+                Self.status="inactive"
+                Self.ParentBlock.checkStatus()
                 AsyncTween(Self.GainNode,1,0,Self.ParentBlock.FadeOutDuration*1000).then(()=>{
-                    Log(new Error(),"Song over?");
+                    Log(new Error(),Self.TrackURL.split(/[/\\]/).pop(),": Song over?");
                     try {
                         Self.Source.stop();
                         Self.Source.disconnect();
                     } catch (error) {
-                        Log(new Error(),"Source hasnt started yet");
+                        Log(new Error(),Self.TrackURL.split(/[/\\]/).pop(),": Source hasnt started yet");
                     }
-                    Self.status="inactive"
-                    Self.ParentBlock.checkStatus()
                     // this.ParentBlock.status="scanning"
                     if(Self.FadeOutThread)clearTimeout(Self.FadeOutThread);
                     if(Self.VisualizerThread){
-                        Log(new Error(),"stopping visualizer");
+                        Log(new Error(),Self.TrackURL.split(/[/\\]/).pop(),": stopping visualizer");
                         clearInterval(Self.VisualizerThread);
                         Self.VisualizerThread=undefined;
-                        Self.visualizerWindow.send("stop-visualizer")
+                        visualizerWindow.send("stop-visualizer")
                     }
                     Self.FadeOutThread=undefined;
                     Self.GainNode=undefined;
@@ -1269,14 +1241,14 @@ class Track
                 })
             }else{
                 Log(new Error(),"Hard stopping");
+                Self.status="inactive"
+                Self.ParentBlock.checkStatus()
                 try {
                     Self.Source.stop();
                     Self.Source.disconnect();
                 } catch (error) {
                     Log(new Error(),"Source hasnt started yet");
                 }
-                Self.status="inactive"
-                Self.ParentBlock.checkStatus()
                 // this.ParentBlock.status="scanning"
                 if(Self.FadeOutThread)clearTimeout(Self.FadeOutThread);
                 if(Self.VisualizerThread){Log(new Error(),"stopping visualizer");
@@ -1288,102 +1260,180 @@ class Track
             }
         }
         if(this.ThreadBusy){
-            let stoppingThread=setInterval(() => {
-                if(!this.ThreadBusy)realStop(this);clearInterval(stoppingThread);
+            this.stoppingThread=setInterval(() => {
+                if(!this.ThreadBusy)realStop(this);
+                console.log(this.stoppingThread);
+                
             }, 500);
         }else{
             realStop(this)
         }
     }
-    playTrack(bUseVisualizer,visualizerWindow)
-    {
-        this.ThreadBusy=true   
-        const audioContext = new AudioContext()
-        getBuffer(audioContext,this.TrackURL).then((audioBuffer)=>{
-            this.Source = audioContext.createBufferSource();
-            this.Source.buffer = audioBuffer 
-            this.GainNode = audioContext.createGain()
+
+    updateVisualizer(analyser){
+        if(!visualizerWindow)throw new Error("Visualizer window is invalid")
+        const frequencyData = new Uint8Array(analyser.frequencyBinCount)
+        analyser.getByteFrequencyData(frequencyData)
+        let Frequencies = Array.from(frequencyData)
+        let flipped = Frequencies.slice().reverse()
+        let concat = flipped.concat(Frequencies)
+        const reducedData = downsampleFrequencyData(concat, 64);
+        // const SmoothData =smoothData(reducedData,1)
+        const ExaggeratedValue = exaggerate(reducedData,3,2)
+        visualizerWindow.send("inbound-frequency",ExaggeratedValue)
+    }
+
+    async playTrack(bUseVisualizer){
+        try {
+            if(this.ThreadBusy)throw new Error(`Playing Thread for track ${this.TrackURL} is already busy`);
+            this.ThreadBusy=true
+            this.status="active"
+            const audioContext = new AudioContext()
+            if(!fs.existsSync(this.TrackURL))throw new Error("Track URL is invalid. This file cannot be found: "+this.TrackURL);
+            this.Source = audioContext.createBufferSource()
+            this.Source.buffer = await getBuffer(audioContext,this.TrackURL)
+            this.GainNode=audioContext.createGain()
             this.GainNode.gain.value=1.0
             this.Source.connect(this.GainNode)
-            this.visualizerWindow=visualizerWindow
+            this.GainNode.connect(audioContext.destination)
             if(bUseVisualizer&&visualizerWindow){
-                const analyser = audioContext.createAnalyser()
+                const analyser =audioContext.createAnalyser()
                 this.Source.connect(analyser)
-                analyser.fftSize=2048;
-                if(this.VisualizerThread){clearInterval(this.VisualizerThread);this.VisualizerThread=undefined;}
+                analyser.fftSize=2048
+                if(this.VisualizerThread)clearInterval(this.VisualizerThread);
                 visualizerWindow.setAlwaysOnTop(true,"screen-saver",1);
                 visualizerWindow.setFullScreenable(false);
                 visualizerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-                // Below statement completes the flow
-                let UUID = generateUUID("visualizerIdSet")
                 this.VisualizerThread=setInterval(()=>{
-                    if (!visualizerWindow.isFocused()) {
-                        visualizerWindow.focus();
-                    }
-                    visualizerWindow.moveTop();
-                    // visualizerWindow.focus()
-                    const frequencyData = new Uint8Array(analyser.frequencyBinCount)
-                    analyser.getByteFrequencyData(frequencyData)
-                    let Frequencies = Array.from(frequencyData)
-                    let flipped = Frequencies.slice().reverse()
-                    let concat = flipped.concat(Frequencies)
-                    const reducedData = downsampleFrequencyData(concat, 64);
-                    // const SmoothData =smoothData(reducedData,1)
-                    const ExaggeratedValue = exaggerate(reducedData,3,2)
-                    if(visualizerWindow)
-                    {
-                        visualizerWindow.send("inbound-frequency",ExaggeratedValue,UUID)
-                    }
+                    this.updateVisualizer(analyser)
                 },1)
             }
-            this.GainNode.connect(audioContext.destination)
-            this.TrackDuration = getTrackLength(audioContext,this.TrackURL).then(TrackDuration=>{
-                this.TrackDuration=TrackDuration
-                this.Source.start()
-                if(this.ParentBlock.bIsFadeIn&&this.ParentBlock.FadeInDuration<=this.TrackDuration)
-                {
-                    Log(new Error(),"Fading in...");
-                    this.GainNode.gain.value=0
-                    AsyncTween(this.GainNode,0,1,this.ParentBlock.FadeInDuration*1000)
-                }
-            this.status="active"
-            Log(new Error(),"Switch track to active");
+            if(!this.TrackDuration)this.TrackDuration=await getTrackLength(audioContext,this.TrackURL);
             if(this.ParentBlock.bIsFadeOut&&this.ParentBlock.FadeOutDuration<=this.TrackDuration){
-                Log(new Error(),"FADING SONG OUT IN ",(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000," MS")
                 this.FadeOutThread = setTimeout(()=>{
-                    Log(new Error(),"FADING SONG OUT")
-                    AsyncTween(this.GainNode,1,0,this.ParentBlock.FadeOutDuration*1000).then(()=>{
-                        Log(new Error(),"Song over?");
-                        try {
-                            this.Source.stop();
-                            this.Source.disconnect();
-                        } catch (error) {
-                            Log(new Error(),"Source hasnt started yet");
-                        }
-                        this.status="inactive"
-                        this.ParentBlock.checkStatus()
-                        // this.ParentBlock.status="scanning"
-                        if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
-                        if(this.VisualizerThread){
-                            Log(new Error(),"stopping visualizer");
-                            clearInterval(this.VisualizerThread);
-                            this.VisualizerThread=undefined;
-                            this.visualizerWindow.send("stop-visualizer")
-                        }
-                        this.FadeOutThread=undefined;
-                        this.GainNode=undefined;
-                        this.Source=undefined;
-                        this.VisualizerThread=undefined;
-                    })
+                    Log(new Error(),this.TrackURL.split(/[/\\]/).pop(),": Fading out track...")
+                    this.status="inactive"
+                    AsyncTween(this.GainNode,1,0,this.ParentBlock.FadeOutDuration*1000)
+                    this.ParentBlock.checkStatus()
+                    Log(new Error(),this.TrackURL.split(/[/\\]/).pop(),": Fading out complete. Cleaning up track")
+                    this.cleanupTrack();
                 },(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000)
+
             }else{
                 this.Source.onended = this.cleanupTrack
             }
+            Log(new Error(),"Playing track: ",this.TrackURL.split(/[/\\]/).pop())
+            this.Source.start()
+            if(this.ParentBlock.bIsFadeIn&&this.ParentBlock.FadeInDuration<=this.TrackDuration){
+                this.GainNode.gain.value=0;
+                Log(new Error(),this.TrackURL.split(/[/\\]/).pop(),": Fading in track")
+                await AsyncTween(this.GainNode,0,1,this.ParentBlock.FadeInDuration*1000)
+                Log(new Error(),this.TrackURL.split(/[/\\]/).pop(),": Fading in complete")
+            }
             this.ThreadBusy=false
-            return
-            })
-        })
+            return Promise.resolve(true)
+        } catch (error) {
+            Log(new Error(),error)
+            console.error(error);
+            this.ThreadBusy=false
+            return Promise.reject()
+        }
     }
+    // playTrack(bUseVisualizer,visualizerWindow)
+    // {
+    //     try {
+    //         this.ThreadBusy=true   
+    //         const audioContext = new AudioContext()
+    //         if(!fs.existsSync(this.TrackURL))throw new Error("Track URL is invalid. This file cannot be found: "+this.TrackURL)
+    //         getBuffer(audioContext,this.TrackURL).then((audioBuffer)=>{
+    //             this.Source = audioContext.createBufferSource();
+    //             this.Source.buffer = audioBuffer 
+    //             this.GainNode = audioContext.createGain()
+    //             this.GainNode.gain.value=1.0
+    //             this.Source.connect(this.GainNode)
+    //             this.visualizerWindow=visualizerWindow
+    //             if(bUseVisualizer&&visualizerWindow){
+    //                 const analyser = audioContext.createAnalyser()
+    //                 this.Source.connect(analyser)
+    //                 analyser.fftSize=2048;
+    //                 if(this.VisualizerThread){clearInterval(this.VisualizerThread);this.VisualizerThread=undefined;}
+    //                 visualizerWindow.setAlwaysOnTop(true,"screen-saver",1);
+    //                 visualizerWindow.setFullScreenable(false);
+    //                 visualizerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    //                 // Below statement completes the flow
+    //                 let UUID = generateUUID("visualizerIdSet")
+    //                 this.VisualizerThread=setInterval(()=>{
+    //                     if (!visualizerWindow.isFocused()) {
+    //                         visualizerWindow.focus();
+    //                     }
+    //                     visualizerWindow.moveTop();
+    //                     // visualizerWindow.focus()
+    //                     const frequencyData = new Uint8Array(analyser.frequencyBinCount)
+    //                     analyser.getByteFrequencyData(frequencyData)
+    //                     let Frequencies = Array.from(frequencyData)
+    //                     let flipped = Frequencies.slice().reverse()
+    //                     let concat = flipped.concat(Frequencies)
+    //                     const reducedData = downsampleFrequencyData(concat, 64);
+    //                     // const SmoothData =smoothData(reducedData,1)
+    //                     const ExaggeratedValue = exaggerate(reducedData,3,2)
+    //                     if(visualizerWindow)
+    //                     {
+    //                         visualizerWindow.send("inbound-frequency",ExaggeratedValue,UUID)
+    //                     }
+    //                 },1)
+    //             }
+    //             this.GainNode.connect(audioContext.destination)
+    //             this.TrackDuration = getTrackLength(audioContext,this.TrackURL).then(TrackDuration=>{
+    //                 this.TrackDuration=TrackDuration
+    //                 this.Source.start()
+    //                 if(this.ParentBlock.bIsFadeIn&&this.ParentBlock.FadeInDuration<=this.TrackDuration)
+    //                 {
+    //                     Log(new Error(),"Fading in...");
+    //                     this.GainNode.gain.value=0
+    //                     AsyncTween(this.GainNode,0,1,this.ParentBlock.FadeInDuration*1000)
+    //                 }
+    //                 this.status="active"
+    //                 Log(new Error(),"Switch track to active");
+    //                 if(this.ParentBlock.bIsFadeOut&&this.ParentBlock.FadeOutDuration<=this.TrackDuration){
+    //                     Log(new Error(),"FADING SONG OUT IN ",(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000," MS")
+    //                     this.FadeOutThread = setTimeout(()=>{
+    //                         Log(new Error(),"FADING SONG OUT")
+    //                         this.status="inactive"
+    //                         this.ParentBlock.checkStatus()
+    //                         AsyncTween(this.GainNode,1,0,this.ParentBlock.FadeOutDuration*1000).then(()=>{
+    //                             Log(new Error(),"Song over?");
+    //                             try {
+    //                                 this.Source.stop();
+    //                                 this.Source.disconnect();
+    //                             } catch (error) {
+    //                                 Log(new Error(),"Source hasnt started yet");
+    //                             }
+    //                             // this.ParentBlock.status="scanning"
+    //                             if(this.FadeOutThread)clearTimeout(this.FadeOutThread);
+    //                             if(this.VisualizerThread){
+    //                                 Log(new Error(),"stopping visualizer");
+    //                                 clearInterval(this.VisualizerThread);
+    //                                 this.VisualizerThread=undefined;
+    //                                 this.visualizerWindow.send("stop-visualizer")
+    //                             }
+    //                             this.FadeOutThread=undefined;
+    //                             this.GainNode=undefined;
+    //                             this.Source=undefined;
+    //                             this.VisualizerThread=undefined;
+    //                         })
+    //                     },(this.TrackDuration-this.ParentBlock.FadeOutDuration)*1000)
+    //                 }else{
+    //                     this.Source.onended = this.cleanupTrack
+    //                 }
+    //                 this.ThreadBusy=false
+    //                 return
+    //             })
+    //         })
+    //     } catch (error) {
+    //         Log(new Error(),error)
+    //         console.error(error);
+    //     }
+    // }
 }
 async function getTrackLength(audioContext,filePath)
 {
@@ -1391,20 +1441,20 @@ async function getTrackLength(audioContext,filePath)
     switch (path.extname(path.join(filePath)).toLowerCase())
     {
         case ".mp3":
-        const decoder = new Lame({
-            output: "buffer"
-        }).setFile(path.join(filePath));
-        await decoder.decode()
-        // Decoding finished
-        buffer = decoder.getBuffer();
-        bufferInfo= await audioContext.decodeAudioData(buffer.buffer)
-        Log(new Error(),"duration: ", bufferInfo.duration);
-        return bufferInfo.duration
+            const decoder = new Lame({
+                output: "buffer"
+            }).setFile(path.join(filePath));
+            await decoder.decode()
+            // Decoding finished
+            buffer = decoder.getBuffer();
+            bufferInfo= await audioContext.decodeAudioData(buffer.buffer)
+            Log(new Error(),"duration: ", bufferInfo.duration);
+            return bufferInfo.duration
         case ".wav":
-        buffer = fs.readFileSync(path.join(filePath))
-        bufferInfo = await audioContext.decodeAudioData(buffer.buffer)
-        Log(new Error(),"duration: ", bufferInfo.duration);
-        return bufferInfo.duration
+            buffer = fs.readFileSync(path.join(filePath))
+            bufferInfo = await audioContext.decodeAudioData(buffer.buffer)
+            Log(new Error(),"duration: ", bufferInfo.duration);
+            return bufferInfo.duration
     }
 }
 async function getBuffer(audioContext,filePath)
@@ -1427,14 +1477,29 @@ async function getBuffer(audioContext,filePath)
     }
 }
 
-async function AsyncTween(audioNode, startVolume, endVolume, duration) {
+// async function AsyncTween(audioNode, startVolume, endVolume, duration) {
+//     const stepTime = 10; // Interval time in ms
+//     const totalSteps = duration / stepTime;
+//     const volumeStep = (endVolume - startVolume) / totalSteps;
+//     for (let step = 0; step <= totalSteps; step++) {
+//         const currentVolume = startVolume + volumeStep * step;
+//         audioNode.gain.value = currentVolume; // Set volume
+//         await new Promise((resolve) => setTimeout(resolve, stepTime)); // Wait for the step interval
+//     }
+// }
+async function AsyncTween(audioNode,startVolume,endVolume,duration){
+    const startTime = performance.now();
     const stepTime = 10; // Interval time in ms
-    const totalSteps = duration / stepTime;
-    const volumeStep = (endVolume - startVolume) / totalSteps;
-    for (let step = 0; step <= totalSteps; step++) {
-        const currentVolume = startVolume + volumeStep * step;
-        audioNode.gain.value = currentVolume; // Set volume
-        await new Promise((resolve) => setTimeout(resolve, stepTime)); // Wait for the step interval
+    function ease(t) {
+        return t; // Linear easing; replace with an easing function if needed
+    }
+    while (true) {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        audioNode.gain.value = startVolume + ease(progress) * (endVolume - startVolume);
+
+        if (progress >= 1) break;
+        await new Promise((resolve) => setTimeout(resolve, stepTime));
     }
 }
 function generateUUID(Channel,OptionalInput)
@@ -1550,7 +1615,9 @@ function CaptureRegionToBuffer(x,y,width,height,resizeX,resizeY){
 // }
 function CompareImageBuffers(ReferenceBuffer,CaptureBuffer,confidence){
     if (ReferenceBuffer.length !== CaptureBuffer.length) {
-        console.error("Buffer lengths do not match!");
+        console.error("Buffer lengths do not match! :");
+        console.log("ReferenceBuffer.length: ",ReferenceBuffer.length);
+        console.log("CaptureBuffer.length: ",CaptureBuffer.length);
         return;
     }
     const diff = Buffer.alloc(ReferenceBuffer.length)

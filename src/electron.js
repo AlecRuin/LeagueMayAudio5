@@ -1,4 +1,5 @@
 const {app, BrowserWindow,Menu,ipcMain,screen, dialog, desktopCapturer,shell } = require("electron");
+app.setName("League May Audio 5")
 const windowStateKeeper = require("electron-window-state");
 const path = require("node:path")
 const robot = require("robotjs")
@@ -7,8 +8,9 @@ const sharp = require("sharp")
 const fs = require("fs")
 require("dotenv").config()
 const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,hexToRGB} = require("./audioHandler");
-const {ClearFile,Log,SetDir,SetWindow, WriteStream, SetVerbosity} = require("./logging.js")
+const {ClearFile,Log,SetDir,SetWindow, WriteStream, SetVerbosity, serializeToString} = require("./logging.js")
 const {GlobalKeyboardListener} = require("node-global-key-listener")
+const {Worker}= require("worker_threads")
 SetDir(app.getPath("userData"))
 let mainWindow,source,MasterScript,overlayWindow,Play,Stop
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -58,9 +60,11 @@ async function Open()
     const result = await dialogBox
     if(!result.canceled){
       dialogBox=undefined
+      mainWindow.send("UpdateAll")
       const jsonData = fs.readFileSync(result.filePaths[0], "utf-8");
       const data = JSON.parse(jsonData);
       Log(new Error(),"parsed data from file: ",data);
+      MasterScript=new Script(undefined,screen.getPrimaryDisplay(),Pixelmatch)
       MasterScript.parseJSON(data)
       mainWindow.send("UpdateAll",MasterScript)
     }
@@ -325,93 +329,98 @@ loadModules().then(()=>{
     screen.on('display-added',updateDisplayCount);
     screen.on('display-removed', updateDisplayCount);
     Play=async function(bIsTesting){
-      if(dialogBox)return;
-      if(bIsTesting){
-        if(!fs.existsSync(path.join(app.getPath("userData"),"TestScans"))){
-          fs.mkdirSync(path.join(app.getPath("userData"),"TestScans"))
-        }
-        fs.readdirSync(path.join(app.getPath("userData"),"TestScans")).forEach((file) => {
-          const filePath = path.join(path.join(app.getPath("userData"),"TestScans"), file);
-          if (fs.statSync(filePath).isDirectory()) {
-            clearDirectory(filePath);  // Recursively clear subdirectories
-            fs.rmdirSync(filePath);    // Remove the subdirectory
-          } else {
-            fs.unlinkSync(filePath);   // Remove files
-          }
-        });
-      } 
-      if (MasterScript.Blocks.length<1) {
-
-        dialogBox=dialog.showMessageBox(null,{
-          message: "You need a priority block to continue. This play button should not be visible.",
-          title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-          icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-        });
-        const result = await dialogBox
-        if(result)dialogBox=undefined;
-        return;
-      }
-      if(!MasterScript.getLeagueDir()){
-        Log(new Error(),"User wans to use default screen reading, but hasn't given a league directory");
-        console.log("MasterScript.Blocks: ",MasterScript.Blocks);
-        for(let x=0;x<MasterScript.Blocks.length;x++){
-          console.log("MasterScript.Blocks[x]: ",MasterScript.Blocks[x]);
-          if(MasterScript.Blocks[x].spellSlot!=6){
-            dialogBox= dialog.showMessageBox(null,{
-              message: "You need to reference your League of Legends installation folder to use anything other than the\"custom location\" option. (This is because the app will read your HUD config and scale the coords in real time)",
-              title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-              icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-            })
-            const result=await dialogBox
-            if(result)dialogBox=undefined;
-            return;
-          }
-        }
-      }
-      Log(new Error(),"master script selected screen: ",MasterScript.getSelectedScreen());
-      if(!MasterScript.getSelectedScreen())MasterScript.changeSelectedScreen(screen.getPrimaryDisplay())
-      if(!ScanningAbilityBorderLocations[4][""+(MasterScript.getSelectedScreen().size.height*MasterScript.getSelectedScreen().scaleFactor)]){
-        Log(new Error(),"Screen isnt supported");
-        Log(new Error(),"Blocks: ",MasterScript.Blocks);
-        Log(new Error(),"MasterScript.getLeagueDir(): ",MasterScript.getLeagueDir());
-        MasterScript.Blocks.forEach(async(element)=>{
-          if(element.spellSlot!=6){
-            Log(new Error(),"Screen isnt supported and the user wants presets enabled");
-            dialogBox=dialog.showMessageBox(null,{
-              message: "Your monitor resolution isn't supported. Please change \"border start\" or \"border end\" to custom and manually insert the pixel coordinates you'd like this app to scan for.",
-              title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-              icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-            })
-            const result=await dialogBox
-            if(result)dialogBox=undefined;
-            return;
-          }
-        })
-      }
-      for(let x=0;x<MasterScript.Blocks.length;x++){
-        if(MasterScript.Blocks[x].scanType=="image"&&!MasterScript.Blocks[x].ScanImagePath){
-            dialogBox= dialog.showMessageBox(null,{
-              message: `Priority block #${x+1} is missing the image template to compare the screen with`,
-              title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-              icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-            })
-            const result=await dialogBox
-            if(result)dialogBox=undefined;
-            return;
-        }
-      }
-      if(!dialogBox){
+      try {
+        if(dialogBox)throw new Error("Dialog box is in use");
         if(bIsTesting){
-          await MasterScript.updateScaleFactor()
-          for(let x=0;x<MasterScript.Blocks.length;x++){
-            await MasterScript.checkImageScan(MasterScript.Blocks[x],bIsTesting,x)
+          if(!fs.existsSync(path.join(app.getPath("userData"),"TestScans"))){
+            fs.mkdirSync(path.join(app.getPath("userData"),"TestScans"))
           }
-          shell.openPath(path.join(app.getPath("userData"),"TestScans")).catch(err=>console.log(err))
-        }else{
-          MasterScript.startScanning(overlayWindow,mainWindow);
-          mainWindow.send("UpdatePlayPauseState",true)
-          //when finished, open dir
+          fs.readdirSync(path.join(app.getPath("userData"),"TestScans")).forEach((file) => {
+            const filePath = path.join(path.join(app.getPath("userData"),"TestScans"), file);
+            if (fs.statSync(filePath).isDirectory()) {
+              clearDirectory(filePath);  // Recursively clear subdirectories
+              fs.rmdirSync(filePath);    // Remove the subdirectory
+            } else {
+              fs.unlinkSync(filePath);   // Remove files
+            }
+          });
+        } 
+        if (MasterScript.Blocks.length<=0) {
+  
+          dialogBox=dialog.showMessageBox(null,{
+            message: "You need a priority block to continue. This play button should not be visible.",
+            title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+            icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+          });
+          const result = await dialogBox
+          if(result)dialogBox=undefined;
+          return;
         }
+        if(!MasterScript.getLeagueDir()){
+          Log(new Error(),"User wans to use default screen reading, but hasn't given a league directory");
+          console.log("MasterScript.Blocks: ",MasterScript.Blocks);
+          for(let x=0;x<MasterScript.Blocks.length;x++){
+            console.log("MasterScript.Blocks[x]: ",MasterScript.Blocks[x]);
+            if(MasterScript.Blocks[x].spellSlot!=6){
+              dialogBox= dialog.showMessageBox(null,{
+                message: "You need to reference your League of Legends installation folder to use anything other than the\"custom location\" option. (This is because the app will read your HUD config and scale the coords in real time)",
+                title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+                icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+              })
+              const result=await dialogBox
+              if(result)dialogBox=undefined;
+              return;
+            }
+          }
+        }
+        Log(new Error(),"master script selected screen: ",MasterScript.getSelectedScreen());
+        if(!MasterScript.getSelectedScreen())MasterScript.changeSelectedScreen(screen.getPrimaryDisplay())
+        if(!ScanningAbilityBorderLocations[4][""+(MasterScript.getSelectedScreen().size.height*MasterScript.getSelectedScreen().scaleFactor)]){
+          Log(new Error(),"Screen isnt supported");
+          Log(new Error(),"Blocks: ",MasterScript.Blocks);
+          Log(new Error(),"MasterScript.getLeagueDir(): ",MasterScript.getLeagueDir());
+          MasterScript.Blocks.forEach(async(element)=>{
+            if(element.spellSlot!=6){
+              Log(new Error(),"Screen isnt supported and the user wants presets enabled");
+              dialogBox=dialog.showMessageBox(null,{
+                message: "Your monitor resolution isn't supported. Please change \"border start\" or \"border end\" to custom and manually insert the pixel coordinates you'd like this app to scan for.",
+                title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+                icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+              })
+              const result=await dialogBox
+              if(result)dialogBox=undefined;
+              return;
+            }
+          })
+        }
+        for(let x=0;x<MasterScript.Blocks.length;x++){
+          if(MasterScript.Blocks[x].scanType=="image"&&(!MasterScript.Blocks[x].ScanImagePath||!fs.existsSync(MasterScript.Blocks[x].ScanImagePath))){
+              dialogBox= dialog.showMessageBox(null,{
+                message: `Priority block #${x+1} is missing the image template to compare the screen with`,
+                title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+                icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+              })
+              const result=await dialogBox
+              if(result)dialogBox=undefined;
+              return;
+          }
+        }
+        if(!dialogBox){
+          if(bIsTesting){
+            await MasterScript.updateScaleFactor()
+            for(let x=0;x<MasterScript.Blocks.length;x++){
+              await MasterScript.checkImageScan(MasterScript.Blocks[x],bIsTesting,x)
+            }
+            shell.openPath(path.join(app.getPath("userData"),"TestScans")).catch(err=>console.log(err))
+          }else{
+            mainWindow.send("UpdatePlayPauseState",true)
+            MasterScript.startScanning(overlayWindow,mainWindow);
+            //when finished, open dir
+          }
+        }
+      } catch (error) {
+        Log(new Error(),error)
+        console.error(error);
       }
     }
     Stop=function(){
@@ -427,98 +436,6 @@ loadModules().then(()=>{
  * @param {Number} height 
  * @returns {Array}
  */
-    // function captureRegionToArray(x,y,width,height){
-    //   const screenImage = robot.screen.capture(x,y,width,height)
-    //   const pixelData=[];
-    //   for(let i=0;i<screenImage.image.length;i+=4)
-    //   {
-    //     pixelData.push({
-    //       r:screenImage.image[i],
-    //       g:screenImage.image[i+1],
-    //       b:screenImage.image[i+2],
-    //       a:screenImage.image[i+3]
-    //     })
-    //   }
-    //   return pixelData
-    // }
-    // function getAlpha(currentValue, min, max) {
-    //   if (currentValue < min) currentValue = min;
-    //   if (currentValue > max) currentValue = max;
-    //   return (currentValue - min) / (max - min);
-    // }
-    // function saveArrayToPNG(pixelData,width,height,outputPath)
-    // {
-    //   const buffer = Buffer.alloc(pixelData.length*4);
-    //   pixelData.forEach((color,index)=>{
-    //     const offset = index*4
-    //     buffer[offset]=color.r
-    //     buffer[offset+1]=color.g
-    //     buffer[offset+2]=color.b
-    //     buffer[offset+3]=color.a
-    //   })
-    //   //sharp(buffer,{raw:{width,height,channels:4}}).toFile(path.join(__dirname,"UntouchedRawBuffer.png"))
-    //   sharp(buffer,{raw:{width,height,channels:4}})
-    //     .resize(64,64)
-    //     .raw()
-    //     .toBuffer()
-    //     .then((newBuffer)=>{
-
-    //       const FixedBuffer = Buffer.alloc(newBuffer.length)
-    //       for (let i=0;i<newBuffer.length;i+=4)
-    //       {
-    //         FixedBuffer[i] = newBuffer[i + 2];     // Red
-    //         FixedBuffer[i + 1] = newBuffer[i + 1]; // Green
-    //         FixedBuffer[i + 2] = newBuffer[i];     // Blue
-    //         FixedBuffer[i + 3] = newBuffer[i + 3]; // Alpha
-    //       }
-    //       //sharp(FixedBuffer,{raw:{width,height,channels:4}}).toFile(path.join(__dirname,"Buffer1.png"))
-    //       console.log(typeof FixedBuffer);
-    //       sharp(path.join(__dirname,"aatrox_r.png")).resize(64,64).ensureAlpha().raw().toBuffer().then((imageBuffer)=>{
-    //         console.log(typeof imageBuffer);
-    //         if (FixedBuffer.length !== imageBuffer.length) {
-    //           console.error("Buffer lengths do not match!");
-    //           console.log("New Buffer Length:", FixedBuffer.length);
-    //           console.log("Image Buffer Length:", imageBuffer.length);
-    //           return;
-    //         }
-    //         const diff = Buffer.alloc(FixedBuffer.length)
-    //         const NumOfMismatch = Pixelmatch(imageBuffer,FixedBuffer,diff,64,64,{diffMask:true,threshold: 0.2})
-    //         console.log("square area of image: ",width*height);
-            
-    //         let Similarity = 1-getAlpha(NumOfMismatch,0,width*height)
-    //         console.log("similarity: ",Similarity);
-            
-    //         console.log("Num of mismatch pixels: ",NumOfMismatch);
-    //         sharp(diff, { raw: { width: 64, height: 64, channels: 4 } })
-    //             .toFile(path.join(__dirname,"diff.png"))
-    //             .then(() => console.log("Diff image saved as diff.png"))
-    //             .catch((err) => console.error("Error saving diff image:", err));
-    //       })
-    //     })
-    //     .catch((err)=>console.log("error: ",err));
-    //     sharp(path.join(__dirname,"aatrox_r.png")).resize(64,64).ensureAlpha().toFile(path.join(__dirname,"Buffer2.png"))
-    // }
-
-    // ipcMain.on("TestImageScanToggle",(e)=>{
-    //   ToggleState=!ToggleState
-    //   if(ToggleState)
-    //   {
-    //     //1165x1346  64
-    //     // 1246 X
-    //     // 1283 Y
-    //     //NEEDS TO BE TOP LEFT CORNER
-    //     let x=1165+81 ,y=1346-63,width=64,height=64
-    //     const pixelData=captureRegionToArray(x,y,width,height)
-    //     console.log("PixelData: ",pixelData);
-    //     saveArrayToPNG(pixelData, width, height, path.join(__dirname,'output.png'));
-    //     //const screen = robot.screen.capture(z)
-    //   }
-    // })
-
-    // ipcMain.on("ChangeDisplay",(e,DisplayNum)=>{
-    //   MasterScript.changeSelectedScreen(screen.getAllDisplays()[DisplayNum])
-    //   SetSavedScript(MasterScript.toJSON())
-    // })
 
     ipcMain.on("ChangeHeartbeat",(e,value)=>{
       (value>=1)?MasterScript.heartbeat = value:MasterScript.heartbeat=1;
@@ -610,7 +527,7 @@ loadModules().then(()=>{
         Conditional ={
           UUID:generateUUID("condIdSet"),
           condOperator:"",
-          condStack:"",
+          condStack:"Jackpot",
           condInput:0,
           condOutput:"",
         }
@@ -660,14 +577,16 @@ loadModules().then(()=>{
         defaultPath:(GetLeagueDirSave())?GetLeagueDirSave():"C:\\Program Files\\Riot Games\\League of Legends"
       })
       const result = await dialogBox
-      if (!fs.existsSync(path.join(result.filePaths[0],"Config","PersistedSettings.json"))) {
-        dialog.showMessageBox(null,{
-          message: "The directory selected doesn't have \"PersistedSettings.json\" in \"config\" folder. Try selecting a valid League of Legends installation folder.",
-          title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
-          icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
-        })
-        dialogBox=undefined
-        return
+      if(!result.canceled){
+        if (!fs.existsSync(path.join(result.filePaths[0],"Config","PersistedSettings.json"))) {
+          dialog.showMessageBox(null,{
+            message: "The directory selected doesn't have \"PersistedSettings.json\" in \"config\" folder. Try selecting a valid League of Legends installation folder.",
+            title:errorTitles[Math.floor(Math.random()*errorTitles.length)],
+            icon:path.join(__dirname,"assets/vergilshonestreaction.jpg")
+          })
+          dialogBox=undefined
+          return
+        }
       }
       // SetLeagueDirSave(result.filePaths[0])
       MasterScript.changeLeagueDir(result.filePaths[0])
@@ -760,7 +679,6 @@ loadModules().then(()=>{
     ipcMain.handle("RemovePriority",(e,UUID)=>{
       MasterScript.removeBlock(UUID)
       Log(new Error(),"Master Script: ",MasterScript);
-      
       mainWindow.send("UpdateAll",MasterScript)
       SetSavedScript(MasterScript.toJSON())
       return MasterScript.Blocks.length
@@ -772,11 +690,7 @@ loadModules().then(()=>{
     })
     ipcMain.on("log",(e,...msg)=>{
       console.log(...msg); 
-      {
-        // const finalizedString = msg.map(arg => typeof arg === 'object' ? JSON.stringify(arg,null," ") : (arg==undefined)?arg:arg.toString()).join(' ');
-        // let now = new Date()
-        // let formatDate = `[${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}.${String(now.getSeconds()).padStart(2, '0')}:${String(now.getMilliseconds()).padStart(3, '0')}]`
-        // WriteStream(`\n${formatDate} `+finalizedString)
+      if(bIsVerboseLogging){
         const seen = new WeakSet();
           const finalizedString = msg.map(arg => 
             typeof arg === 'object' 
@@ -811,22 +725,45 @@ loadModules().then(()=>{
     updateDisplayCount()
     //#region KEYBOARD LISTENER
     Log(new Error(),"Attaching keyboard listener...");
-    let kbListener
-    kbListener = new GlobalKeyboardListener({windows:{onError:(err)=>console.log(err)}})
-    kbListener.addListener((e,down)=>{
-      if(e.state=="DOWN"&&e.name=="SQUARE BRACKET OPEN"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
-        if(mainWindow.isFocused())return;
-        console.log("Start playing");
-        Play()
-      }else if(e.state=="DOWN"&&e.name=="SQUARE BRACKET CLOSE"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
-        if(mainWindow.isFocused())return;
-        console.log("Stop playing");
-        Stop()
-      }else if(e.state=="DOWN"&&e.name=="BACKSLASH"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
-        if(mainWindow.isFocused())return;
-        Play(true)
+    const kbWorker = new Worker(path.join(__dirname,"./workers/KbListenerWorker.js"))
+    kbWorker.on("message",({command,data})=>{
+      switch (command) {
+        case "play":
+          Play(data)
+          break;
+        case "stop":
+          Stop()
+          break;
+        default:
+          console.error("no command given")
+          break;
       }
     })
+    kbWorker.on("error", (err) => console.error("Worker Error:", err));
+    kbWorker.on("exit", (code) => {
+      if (code !== 0) console.error(`Worker exited with code ${code}`);
+    });
+    // let kbListener
+    // kbListener = new GlobalKeyboardListener({windows:{onError:(err)=>console.log(err)}})
+    // kbListener.addListener((e,down)=>{
+    //   if(e.state=="UP")return;
+    //   if (!["SQUARE BRACKET OPEN", "SQUARE BRACKET CLOSE", "BACKSLASH"].includes(e.name)) return;
+    //   console.log("Valid key pressed")
+    //   if(e.state=="DOWN"&&e.name=="SQUARE BRACKET OPEN"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
+    //     if(mainWindow.isFocused())return;
+    //     console.log("Start playing");
+    //     if(MasterScript.scanningThread)return;
+    //     Play()
+    //   }else if(e.state=="DOWN"&&e.name=="SQUARE BRACKET CLOSE"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
+    //     if(mainWindow.isFocused())return;
+    //     if(!MasterScript.scanningThread)return;
+    //     console.log("Stop playing");
+    //     Stop()
+    //   }else if(e.state=="DOWN"&&e.name=="BACKSLASH"&&(down["LEFT CTRL"]||down["RIGHT CTRL"])){
+    //     if(mainWindow.isFocused())return;
+    //     Play(true)
+    //   }
+    // })
     //#endregion
    
   })

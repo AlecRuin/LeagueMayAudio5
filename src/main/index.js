@@ -87,11 +87,11 @@ function RefreshTrackList(UUID,SoundsList,Tracks)
         NewSoundEntry.innerHTML=`
             <div>
             ${x+1}. ${Tracks[x].TrackURL.split("\\").pop()}
-            <button id=${"DeleteTrackBtn-"+x}>X</button>
+            <button id=${"DeleteTrackBtn-"+UUID+"-"+x}>X</button>
             </div>
         `;
         SoundsList.appendChild(NewSoundEntry);
-        document.getElementById("DeleteTrackBtn-"+x).addEventListener("click",async()=>{
+        document.getElementById("DeleteTrackBtn-"+UUID+"-"+x).addEventListener("click",async()=>{
             Log(new Error(),"calling main to destroy track with uuid: ",Tracks[x].UUID);
             let newTracks = await window.electronAPI.InvokeRendererToMain("RemoveTrack",UUID,Tracks[x].UUID);
             (newTracks)?RefreshTrackList(UUID,SoundsList,newTracks):RefreshTrackList(UUID,SoundsList,[]);
@@ -174,7 +174,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
     let numOfPriorities=await window.electronAPI.InvokeRendererToMain("GetNumOfPriorities");
     Log(new Error(),`Number of priority blocks that exist currently: ${numOfPriorities}`)
     PlayBtn.style.display="inline-block"
-    document.querySelectorAll(".column-display").forEach(element=>element.style.display="inline-block")
+    document.querySelectorAll(".column-display").forEach(element=>element.style.display="flex")
     let NewPriorityBlockDiv = document.createElement("div")
     NewPriorityBlockDiv.classList.add("priority-block") 
     NewPriorityBlockDiv.id = UUID
@@ -228,7 +228,7 @@ async function CreatePriorityBlock(UUID,options,optionalX)
                     <option ${(options&&options.scanColorType=="yellow")?"selected":""} value="yellow">yellow color</option>
                     <option ${(options&&options.scanColorType=="gold")?"selected":""}   value="gold">gold color</option>
                     <option ${(options&&options.scanColorType=="silver")?"selected":""} value="silver">silver color</option>
-                    <option ${(options&&options.scanColorType=="glimmer")?"selected":""}value="glimmer">glimmer color</option>
+                    <option ${(options&&options.scanColorType=="glimmer")?"selected":""} value="glimmer">glimmer color</option>
                     <option ${(options&&options.scanColorType=="custom")?"selected":""} value="custom">custom color</option>
                 </select>
                 <input value=${(options&&options.scanColorCustomRGB)?options.scanColorCustomRGB:"#000000"} id=${"SpellCustomColorInput-"+UUID} style=${(options&&options.scanColorType=="custom")?"display:inline-block;":"display:none;"} type=color></input>
@@ -461,11 +461,14 @@ window.electronAPI.SignalToRenderer("UpdateAll",(Data)=>{
     if(Data&&Data.Blocks&&Data.Blocks.length>0)
     {
         (Data.Blocks.length>0)?PlayBtn.style.display="inline-block":PlayBtn.style.display="none"
+        document.querySelectorAll(".column-display").forEach(element=>element.style.display="flex")
         for(let x=0;x<Data.Blocks.length;x++)
         {
             let Block = Data.Blocks[x]
             CreatePriorityBlock(Block.UUID,Block,x)
         }
+    }else{
+        document.querySelectorAll(".column-display").forEach(element=>element.style.display="none")
     }
 })
 window.electronAPI.SignalToRenderer("UpdatePlayPauseState",(Value)=>{
@@ -507,9 +510,9 @@ PlayBtn.addEventListener("click",()=>{
     window.electronAPI.SignalToMain("PlayPauseScan");
 });
 LeagueDir.addEventListener("click",async(e)=>{
-    Log(new Error(),"Asking Main process for dialog box to select League of Legends installation directory")
-    const LeagueDirectory = await window.electronAPI.InvokeRendererToMain("OpenDirDialog")
-    if(LeagueDirectory)LeagueDirSpan.innerHTML=LeagueDirectory;
+    Log(new Error(),"Asking Main process for dialog box to select League of Legends installation directory");
+    const LeagueDirectory = await window.electronAPI.InvokeRendererToMain("OpenDirDialog");
+    (LeagueDirectory)?LeagueDirSpan.innerText=LeagueDirectory:LeagueDirSpan.innerText="";
 })
 let variables_table=document.createElement("variables-table")
 variables_table.UUID="none"
