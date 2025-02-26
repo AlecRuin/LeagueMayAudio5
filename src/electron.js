@@ -3,16 +3,17 @@ app.setName("League May Audio 5")
 const windowStateKeeper = require("electron-window-state");
 const path = require("node:path")
 const robot = require("robotjs")
-const sharp = require("sharp")
 //const pixelmatch = require("pixelmatch")
 const fs = require("fs")
 require("dotenv").config()
 const {Script,Block,Track,ScanningAbilityBorderLocations,generateUUID,hexToRGB} = require("./audioHandler");
 const {ClearFile,Log,SetDir,SetWindow, WriteStream, SetVerbosity, serializeToString} = require("./logging.js")
-const {GlobalKeyboardListener} = require("node-global-key-listener")
 const {Worker}= require("worker_threads")
+const axios = require("axios")
+const {jwtDecode} = require("jwt-decode")
 SetDir(app.getPath("userData"))
-let mainWindow,source,MasterScript,overlayWindow,Play,Stop
+const { machineIdSync } = require('node-machine-id');
+let mainWindow,MasterScript,overlayWindow,Play,Stop,popupWindow
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 let errorTitles=[
   "Schum.",
@@ -36,7 +37,9 @@ let errorTitles=[
   "Pathetic",
   "You mock me!?",
 ]
-let GetLeagueDirSave,SetLeagueDirSave,GetSavedScript,SetSavedScript,DeleteAllData,dialogBox,saveLocation,GetLoggingState,SetLoggingState,Pixelmatch,bIsVerboseLogging
+let GetLeagueDirSave,SetLeagueDirSave,GetSavedScript,SetSavedScript,DeleteAllData,dialogBox,
+saveLocation,GetLoggingState,SetLoggingState,Pixelmatch,bIsVerboseLogging,checkLicenseAndUpdate,
+GetLicenseKey,SetLicenseKey,GetVerified,SetVerified,SetJWT,GetJWT;
 async function loadModules(){
   let module = await import("./electronstore.mjs")
   let module2 = await import("./pixelmatcher.mjs")
@@ -47,6 +50,10 @@ async function loadModules(){
   DeleteAllData=module.DeleteAllData;
   GetLoggingState=module.GetLoggingState
   SetLoggingState=module.SetLoggingState
+  GetLicenseKey=module.GetLicenseKey
+  SetLicenseKey=module.SetLicenseKey
+  SetJWT = module.SetJWT
+  GetJWT = module.GetJWT
   Pixelmatch=module2.Pixelmatch
 }
 async function Open()
@@ -124,6 +131,13 @@ async function SaveAs()
     }
   }
 }
+function isTokenExpired(token){
+  try {
+    return jwtDecode(token).exp < Math.floor(Date.now()/1000)
+  } catch (error) {
+    return true
+  }
+}
 loadModules().then(()=>{
   bIsVerboseLogging = GetLoggingState()||false;
   SetVerbosity(bIsVerboseLogging)
@@ -133,6 +147,34 @@ loadModules().then(()=>{
     app.quit();
   }
   ClearFile()
+  const createPopup = ()=>{
+    const {width,height}= screen.getPrimaryDisplay().workAreaSize
+    popupWindow=new BrowserWindow({
+      width: width*0.50,
+      height: height*0.45,
+      center:true,
+      resizable:false,
+      minimizable:false,
+      maximizable:false,
+      fullscreenable:false,
+      title:"Input license key to continue",
+      icon:path.join(__dirname,"./assets/neroicon.ico"),
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+      },
+    })
+    popupWindow.setMenuBarVisibility(false)
+    popupWindow.moveTop()
+    popupWindow.webContents.openDevTools();
+    popupWindow.loadFile(path.join(__dirname, 'main/license.html'));
+    popupWindow.on("close",(e)=>{
+      e.preventDefault()
+      popupWindow.destroy()
+      if(mainWindow)mainWindow.destroy();
+      app.quit();
+    })
+  }
+
   const createWindow = () => {
     // Create the browser window.
     const {width,height}= screen.getPrimaryDisplay().workAreaSize
@@ -263,15 +305,10 @@ loadModules().then(()=>{
       // Open the DevTools.
       mainWindow.webContents.openDevTools();
     }
-  
     mainWindow.on("close",(e)=>{
       mainWindowState.saveState()
-      if (source!=null)
-      {
-        source.stop();
-        source.disconnect()
-        source=null
-      } 
+      mainWindow.destroy();
+      if(popupWindow)popupWindow.destroy();
       app.quit();
     })
     SetWindow(mainWindow)
@@ -304,18 +341,21 @@ loadModules().then(()=>{
   // This method will be called when Electron has finished
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
-  app.whenReady().then(() => {
+  function mainInit(){
+    //if not, create license window
+    //if license window closed, close app
+    //if license is invalid, reopen license window with error
+    //if license is valid, save license and destroy window
     createWindow();
     createOverlay();
-    // On OS X it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-        createOverlay()
-      }
-    });
-  
+    // // On OS X it's common to re-create a window in the app when the
+    // // dock icon is clicked and there are no other windows open.
+    // app.on('activate', () => {
+    //   if (BrowserWindow.getAllWindows().length === 0) {
+    //     createWindow();
+    //     createOverlay()
+    //   }
+    // });
     function updateDisplayCount(...args)
     {
       console.log("UPDATING SCREENS FOR RENDERER");
@@ -428,15 +468,6 @@ loadModules().then(()=>{
       MasterScript.stopScanning();
       mainWindow.send("UpdatePlayPauseState",false)
     }
-/**
- * 
- * @param {Number} x 0 = left-most side of screen  
- * @param {Number} y 0 = top-most side of screen
- * @param {Number} width 
- * @param {Number} height 
- * @returns {Array}
- */
-
     ipcMain.on("ChangeHeartbeat",(e,value)=>{
       (value>=1)?MasterScript.heartbeat = value:MasterScript.heartbeat=1;
       SetSavedScript(MasterScript.toJSON())
@@ -561,7 +592,6 @@ loadModules().then(()=>{
       SetSavedScript(MasterScript.toJSON())
       return PostOP.UUID
     })
-
     ipcMain.on("ChangeCondValue",(e,BlockUUID,UUID,channel,value)=>{
       let Block= MasterScript.Blocks.find(block=>block.UUID===BlockUUID)
       if(!Block)return;
@@ -683,7 +713,6 @@ loadModules().then(()=>{
       SetSavedScript(MasterScript.toJSON())
       return MasterScript.Blocks.length
     })
-   
     ipcMain.handle("GetNumOfPriorities",()=>{
       if (MasterScript.Blocks)return MasterScript.Blocks.length
       return 0
@@ -711,7 +740,6 @@ loadModules().then(()=>{
       }
     })
     mainWindow.send("UpdateDisplaySelection",[screen.getPrimaryDisplay()])
-    
     MasterScript = new Script(undefined,screen.getPrimaryDisplay(),Pixelmatch)
     try {
       let Data = GetSavedScript();
@@ -729,10 +757,10 @@ loadModules().then(()=>{
     kbWorker.on("message",({command,data})=>{
       switch (command) {
         case "play":
-          Play(data)
+          if(!mainWindow.isFocused())Play(data);
           break;
         case "stop":
-          Stop()
+          if(!mainWindow.isFocused())Stop();
           break;
         default:
           console.error("no command given")
@@ -743,6 +771,87 @@ loadModules().then(()=>{
     kbWorker.on("exit", (code) => {
       if (code !== 0) console.error(`Worker exited with code ${code}`);
     });
+  }
+  async function SubmitLicenseKey(key){
+    try {
+      const response = await axios({
+        url:"http://localhost:3000/license/validate",
+        method:"PATCH",
+        data:{token:key,machineId:machineIdSync()}
+      })
+      // Log(new Error(),response)
+      if(response.status==200){
+        //save JWT
+        SetJWT(response.data)
+        //save license key
+        SetLicenseKey(key)
+        mainInit()
+        popupWindow.destroy()
+        return true
+      }
+      return false
+    } catch (error) {
+      Log(new Error(),error.message)
+      return false
+    }
+  }
+
+  app.whenReady().then(async() => {
+    //Check if license is saved
+    if (!GetJWT()||isTokenExpired(GetJWT().accessToken)){
+      Log(new Error(),"JWT is missing or expired. Checking for license key")
+      let licenseKey = GetLicenseKey()||""
+      if(licenseKey==""){
+        //if not, create license window
+        if(!popupWindow)createPopup();
+      }else{
+        //do verification of JWT. 
+        try {
+          Log(new Error(),"Attempting to generate new JWT")
+          const result = await axios({
+            url:"http://localhost:3000/license/verify",
+            method:"POST",
+            data:{licenseKey:licenseKey,refreshToken:GetJWT().refreshToken,machineId:machineIdSync()}
+          })
+          if(result.status==200){
+            Log(new Error(),"successfully generated new JWT. continuing")
+            //save JWT
+            SetJWT(result.data)
+            //save license key
+            // SetLicenseKey(key)
+            mainInit()
+            // popupWindow.destroy()
+            return true
+          }else{
+            throw new Error("Status code was not 200")
+          }
+        } catch (error) {
+          Log(new Error(),"Something went wrong")
+          (error.message)?Log(new Error(),error.message):Log(new Error(),error.status)
+          SetJWT("")
+          SetLicenseKey("")
+          createPopup();
+        }
+      }
+    }else{
+      mainInit()
+    }
+    ipcMain.on("CreatePayPalOrder",async()=>{
+      try {
+        const response =await axios({
+          url:"http://localhost:3000/pp/pay",
+          method:"POST"
+        })
+        if(response.request.res.responseUrl)shell.openExternal(response.request.res.responseUrl)
+      } catch (error) {
+        Log(new Error(),error)
+        popupWindow.send("OnError",error.code)
+      }
+    })
+    ipcMain.handle("SubmitLicenseKey",async(e,key)=>{
+      SubmitLicenseKey(key)
+    })
+    
     // let kbListener
     // kbListener = new GlobalKeyboardListener({windows:{onError:(err)=>console.log(err)}})
     // kbListener.addListener((e,down)=>{
@@ -765,18 +874,5 @@ loadModules().then(()=>{
     //   }
     // })
     //#endregion
-   
   })
-  // Quit when all windows are closed, except on macOS. There, it's common
-  // for applications and their menu bar to stay active until the user quits
-  // explicitly with Cmd + Q.
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit();
-    }
-  });
-  
-  // In this file you can include the rest of your app's specific main process
-  // code. You can also put them in separate files and import them here.
-
 })

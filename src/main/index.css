@@ -58,12 +58,24 @@ body {
       background-position: 200% 0%;
   }
 }
-
+a{
+  text-decoration: none;
+  color: inherit;
+}
 .m-a{
   margin: auto;
 }
+.m-0{
+  margin: 0px;
+}
+.m-5{
+  margin: 5%;
+}
 .m-10{
   margin: 10%;
+}
+.pad-sides-20{
+  padding: 0px 20px;
 }
 img{
   object-fit: contain;

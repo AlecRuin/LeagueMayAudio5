@@ -24,8 +24,30 @@ export function SetLoggingState(data)
 {
     store.set("LoggingState",data)
 }
+export function GetLicenseKey()
+{
+    return store.get("LicenseKey")
+}
+export function SetLicenseKey(data)
+{
+    if(data==undefined){
+        store.delete("LicenseKey")
+    }else{
+        store.set("LicenseKey",data)
+    }
+}
+export function GetJWT()
+{
+    return store.get("JWT")
+}
+export function SetJWT(data)
+{
+    store.set("JWT",data)
+}
 export function DeleteAllData()
 {
     store.delete("SavedScript")
     store.delete("LeagueDirSave")
 }
+// if(process.env.NODE_ENV!="production")store.delete("JWT");
+// if(process.env.NODE_ENV!="production")store.delete("LicenseKey");

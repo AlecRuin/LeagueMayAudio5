@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="index.css" />
+    <title>Insert license key to continue</title>
+</head>
+<body class="m-a pad-sides-20 flex flex-column">
+    <div>
+        <h1>League May Audio 5</h1>
+        <h2 class="m-0">By Katlec Valentine | Swoggerslol</h2>
+        <ul>
+            <b>This app requires an license to operate. The license fee is a one-time purchase of $5 USD.</b> <br><br>
+            <li>By purchasing a license, the User (you) agrees and acknowledges that they will not be refunded any amount once the product is released to open source in the future.<br></li>
+            <li>The User understands the product is imperfect and therefore will report any encounted bugs to Valentine.<br></li>
+            <li>The User understands that distribution of this software and licenses are prohibited and may result in the User license being revoke and not refunded.<br></li>
+            <li>The User understands that usage of the license key will immediately result in an "used license key" and will disallow them from receiving a refund. </li>
+            <li>Failure to adhere will require the User to purchase the expensive $5 USD license should they ever want to operate the application again. </li>
+            <li style="color: red;">In the event the User has not used the app in 30 days after buying a license key, the User MUST contact Valentine with their PayPal transaction/order number of the original purchase to be reissued a new license key.</li>
+        </ul>
+        <span>If you have any question, please, <a class="shimmer text-gradient-bg quaternary-to-lighter-quaternary" href="https://discord.gg/9HauPsab46">make a public/private thread and contact Valentine.</a></span>
+    </div>
+    <br>
+    <div class="flex jc-space-between w-100">
+        <div>
+            <input style="max-width: 60%;" type="text" placeholder="Input license key here" id="licenseinput"></input>
+            <button id="submit">Submit</button>
+        </div>
+        <button id="payButton">Purchase license with PayPal in browser</button>
+    </div>
+    <br><br>
+    <span style="color: rgb(255, 0, 0);" id="errormsg"></span>
+    <script>
+    let input = document.getElementById("licenseinput")
+    let errormsg = document.getElementById("errormsg")
+    document.getElementById("payButton").addEventListener("click",() =>{
+        errormsg.innerText=""
+        window.electronAPI.SignalToMain("CreatePayPalOrder");
+    });
+    document.getElementById("submit").addEventListener("click",async()=>{
+        errormsg.innerText=""
+        input.value=input.value.trim()
+        if(input.value){
+            await window.electronAPI.InvokeRendererToMain("SubmitLicenseKey",input.value)
+        }
+    })
+    window.electronAPI.SignalToRenderer("OnError",(error)=>{
+        console.log("Error received: ",error);
+        errormsg.innerText=error + ", please contact Valentine"
+        errormsg.innerText=errormsg.innerText.toUpperCase()
+    })
+    </script>
+</body>
+</html>

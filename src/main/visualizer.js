@@ -14,6 +14,7 @@ let LineColor =[47,212,227]
 let FillColor=[47,212,227]
 let pattern
 let ImgReady=false
+let RecentUUID
 function hexToRGB(hex)
 {
     hex=hex.replace("#","")
@@ -143,17 +144,22 @@ function drawVisualizer(frequencyData) {
 window.electronAPI.SignalToRenderer("inbound-frequency",(Data,UUID)=>{
     //console.log("Data: ",Data);
     //console.log("UUID: ",UUID);
-    
+    console.log("Inbound UUID: ",UUID)
+    console.log("Inbound RecentUUID: ",RecentUUID)
+    if(UUID!=RecentUUID)return;
     const Points = Data.map((value,index)=>({
         x:index*(canvas.width / Data.length),
         y:canvas.height-value
     }))
     drawVisualizer(Points)
 })
-window.electronAPI.SignalToRenderer("inbound-settings",(Data)=>{
+window.electronAPI.SignalToRenderer("inbound-settings",(Data,UUID)=>{
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     fillMode=Data.bFillVisualizer
+    RecentUUID=UUID
+    console.log("UUID: ",UUID)
+    console.log("RecentUUID: ",RecentUUID)
     LineColor=hexToRGB(Data.VisualizerLineColor)
     FillColor=hexToRGB(Data.VisualizerFillColor)
     if(!Data.VisualizerFillPatternPath){

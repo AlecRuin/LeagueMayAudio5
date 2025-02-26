@@ -350,6 +350,7 @@ let SETS={
     postTrackOps:new Set()
 }
 let StopDebouncer=false
+let SexyAssScanBuffer
 class Script
 {
     /**
@@ -464,6 +465,7 @@ class Script
                             Log(new Error(),"Priority is custom location pixel scan");
                             //custom pixel location
                             Block.targetLocation={X:Block.scanCustomLocation[0],Y:Block.scanCustomLocation[1]}
+                            Block.targetColor=hexToRGB(Block.scanColorCustomRGB)
                             Log(new Error(),"Block.targetLocation: ",Block.targetLocation);
                         }else{throw new Error("invalid Block.spellSlot")}
                     }else if (Block.scanType=="image"){
@@ -508,6 +510,7 @@ class Script
                             Block.targetLocation={X:Block.scanCustomLocation[0],Y:Block.scanCustomLocation[1]}
                             Block.ScanWidth=info.width
                             Block.ScanHeight=info.height
+                            
                         }else{throw new Error("invalid Block.spellSlot")}
                     }else{
                         throw new Error("invalid Block.scanType")
@@ -517,7 +520,7 @@ class Script
                         throw new Error("Block.targetLocation failed! Values are not valid!")
                     }
                 }
-                (Block.scanColorType=="custom")?Block.targetColor=hexToRGB(Block.scanColorCustomRGB):Block.targetColor=ColorPresets[Block.scanColorType]
+                // (Block.scanColorType=="custom")?Block.targetColor=hexToRGB(Block.scanColorCustomRGB):Block.targetColor=ColorPresets[Block.scanColorType]
             
             }
         } catch (error) {
@@ -526,14 +529,15 @@ class Script
         }
     }
     
+
+
     async checkImageScan(Block,bIsTesting,BlockIndex){
+        Log(new Error(),"Check image scans called")
         try {
+            if(bIsTesting)SexyAssScanBuffer={};
             if(Block.status=="playing")return Promise.resolve(false);
             // let Block = this.Blocks[BlockIndex]
-            if(PreventIndex>BlockIndex){
-                //Skipping scan due to preventative index
-                return Promise.resolve(false)
-            }
+            if(PreventIndex>BlockIndex)return Promise.resolve(false);
             let conditionMet=false
             if(!bIsTesting&&Block.startStatus=="playing"&&!Block.Started)
             {
@@ -546,31 +550,10 @@ class Script
                     if(Block.scanType=="pixel")
                     {
                         if(bIsTesting){
-                            let ColorAtPixel = getPixelColor(Block.targetLocation)
-                            let totalDifference = 0;
-                            const maxDifference = 255 * Block.targetColor.length;
-                            for (let i = 0; i < Block.targetColor.length; i++) {
-                                totalDifference += Math.abs(Block.targetColor[i] - ColorAtPixel[i]);
-                            }
-                            const Confidence = 1 - totalDifference / maxDifference;
-                            let DataArray={
-                                ScanLocation:Block.targetLocation,
-                                TargetColor:Block.targetColor,
-                                FoundColor:ColorAtPixel,
-                                ConfidenceNeeded:Block.confidence,
-                                CurrentConfidence:Confidence,
-                                DidPrioritySucceed:Confidence >= Block.confidence
-                            }
+                            let DataArray = PixelScan(bIsTesting,Block.targetLocation,Block.targetColor,Block.confidence)
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(DataArray,null," "))
                         }else{
-                            if (Block.targetLocation.X==undefined||Block.targetLocation.Y==undefined){
-                                console.error("Block.targetLocation failed! Values are not valid!")
-                                throw new Error("Block.targetLocation failed! Values are not valid!")
-                            }
-                            let ColorAtPixel = getPixelColor(Block.targetLocation)
-                            conditionMet = isWithinConfidence(Block.targetColor,ColorAtPixel,Block.confidence) 
-                            if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
-                            return Promise.resolve(conditionMet)
+                            return Promise.resolve(PixelScan(bIsTesting,Block.targetLocation,Block.targetColor,Block.confidence,BlockIndex))
                         }
                     }else if(Block.scanType=="image"){
                         if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer");
@@ -612,33 +595,21 @@ class Script
                         if(bIsTesting){
                             let ScanData=[]
                             for(let x=0;x<Block.targetLocation.length;x++){
-                                let ColorAtPixel = getPixelColor(Block.targetLocation[x])
-                                let totalDifference = 0;
-                                const maxDifference = 255 * Block.targetColor.length;
-                                for (let i = 0; i < Block.targetColor.length; i++) {
-                                    totalDifference += Math.abs(Block.targetColor[i] - ColorAtPixel[i]);
-                                }
-                                const Confidence = 1 - totalDifference / maxDifference;
-                                let DataArray={
-                                    ScanLocation:Block.targetLocation[x],
-                                    // TargetColor:Block.targetColor,
-                                    FoundColor:ColorAtPixel,
-                                    // ConfidenceNeeded:Block.confidence,
-                                    CurrentConfidence:Confidence,
-                                    DidPrioritySucceed:Confidence >= Block.confidence
-                                }
+                                // let ColorAtPixel = getPixelColor(Block.targetLocation[x])
+                                // let totalDifference = 0;
+                                // const maxDifference = 255 * Block.targetColor.length;
+                                // for (let i = 0; i < Block.targetColor.length; i++) {
+                                //     totalDifference += Math.abs(Block.targetColor[i] - ColorAtPixel[i]);
+                                // }
+                                // const Confidence = 1 - totalDifference / maxDifference;
+                                let DataArray=PixelScan(bIsTesting,Block.targetLocation[x],Block.targetColor,Block.confidence)
                                 ScanData.push(DataArray)
                             }
                             ScanData.push({TargetColor:Block.targetColor,ConfidenceNeeded:Block.confidence})
                             fs.writeFileSync(path.join(app.getPath("userData"),"TestScans","Priority"+(BlockIndex+1)+"ScanResult.json"),JSON.stringify(ScanData,null," "))
                         }else{
                             for(let x=0;x<Block.targetLocation.length;x++){
-                                if (Block.targetLocation[x].x==undefined||Block.targetLocation[x].x==undefined){
-                                    console.error("Block.targetLocation failed! Values are not valid!")
-                                    throw new Error("Block.targetLocation failed! Values are not valid!")
-                                }
-                                let ColorAtPixel = getPixelColor(Block.targetLocation[x])
-                                conditionMet = isWithinConfidence(Block.targetColor,ColorAtPixel,Block.confidence) 
+                                conditionMet=PixelScan(bIsTesting,Block.targetLocation[x],Block.targetColor,Block.confidence)
                                 if(conditionMet){
                                     Log(new Error(),"IMAGE CONDITION MET");
                                     return Promise.resolve(conditionMet)
@@ -646,7 +617,7 @@ class Script
                             }
                             return Promise.resolve(false)
                         }
-                    }else if(Block.scanType){
+                    }else if(Block.scanType=="image"){
                         if(!Block.ScanImageBuffer)throw new Error("Missing scan image buffer");
                         //crazy ass buff location with image comparison
                         if(bIsTesting){
@@ -690,6 +661,7 @@ class Script
                     if(Block.scanType=="pixel"){
                         //Do custom location pixel comparison
                         if(bIsTesting){
+                            Log(new Error(),"Doing custom pixel tests")
                             let ColorAtPixel = getPixelColor(Block.targetLocation)
                             let totalDifference = 0;
                             const maxDifference = 255 * Block.targetColor.length;
@@ -796,15 +768,20 @@ class Script
                             Log(new Error(),`#${BlockIndex}: Changing block status to playing`)
                             Block.changeStatus("playing");
                         }
-                        if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath});
-                        Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,visualizerWindow);
+                        let UUID=Math.floor(Math.random()*1e6)
+                        if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath},UUID);
+                        Block.Tracks[(Block.bIsRandom)?Math.floor(Math.random()*Block.Tracks.length):Block.TrackIndex].playTrack(Block.bUseVisualizer,UUID);
                         Block.TrackIndex++;
                         if(Block.TrackIndex>(Block.Tracks.length-1))Block.TrackIndex=0;  
                     }else Log(new Error(),"#"+BlockIndex,": ","NO TRACKS FOUND. SKIPPING");
                     break;
                 case "play-all":
                     Log(new Error(),"#"+BlockIndex,": ","PLAYING ALL TRACKS");
-                    for(let x=0;x<Block.Tracks.length;x++)Block.Tracks[x].playTrack();
+                    for(let x=0;x<Block.Tracks.length;x++){
+                        let UUID=Math.floor(Math.random()*1e6)
+                        if(Block.bUseVisualizer)visualizerWindow.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath},UUID);
+                        Block.Tracks[x].playTrack(Block.bUseVisualizer,UUID);
+                    }
                     if(bIsPostOp&&Block.Tracks.length>0){
                         Log(new Error(),`#${BlockIndex}: Changing block status to playing`)
                         Block.changeStatus("playing");
@@ -856,7 +833,6 @@ class Script
     {
         mainWindow=MainWindow;
         visualizerWindow=window;
-        Log(new Error(),"Begin scanning");
         if(mainWindow){
             let Blocks=[]
             for(let x=0;x<this.Blocks.length;x++){
@@ -931,7 +907,8 @@ class Script
                                         Block.stopAllTracks()
                                     }else if(Block.status!="playing"&&Cond.condOutput=="playing"){
                                         Log(new Error(),"CONDITION MET. DOING OUTPUTS");
-                                        if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath})
+                                        // let UUID=Math.floor(Math.random()*1e6)
+                                        // if(Block.bUseVisualizer)window.send("inbound-settings",{bFillVisualizer:Block.bFillVisualizer,VisualizerFillColor:Block.VisualizerFillColor,VisualizerLineColor:Block.VisualizerLineColor,VisualizerFillPatternPath:Block.VisualizerFillPatternPath},UUID)
                                         this.doOutputs(Block,BlockIndex)
                                     }else if(Block.status!=Cond.condOutput)
                                     {
@@ -1270,7 +1247,7 @@ class Track
         }
     }
 
-    updateVisualizer(analyser){
+    updateVisualizer(analyser,UUID){
         if(!visualizerWindow)throw new Error("Visualizer window is invalid")
         const frequencyData = new Uint8Array(analyser.frequencyBinCount)
         analyser.getByteFrequencyData(frequencyData)
@@ -1280,10 +1257,10 @@ class Track
         const reducedData = downsampleFrequencyData(concat, 64);
         // const SmoothData =smoothData(reducedData,1)
         const ExaggeratedValue = exaggerate(reducedData,3,2)
-        visualizerWindow.send("inbound-frequency",ExaggeratedValue)
+        visualizerWindow.send("inbound-frequency",ExaggeratedValue,UUID)
     }
 
-    async playTrack(bUseVisualizer){
+    async playTrack(bUseVisualizer,UUID){
         try {
             if(this.ThreadBusy)throw new Error(`Playing Thread for track ${this.TrackURL} is already busy`);
             this.ThreadBusy=true
@@ -1305,7 +1282,7 @@ class Track
                 visualizerWindow.setFullScreenable(false);
                 visualizerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
                 this.VisualizerThread=setInterval(()=>{
-                    this.updateVisualizer(analyser)
+                    this.updateVisualizer(analyser,UUID)
                 },1)
             }
             if(!this.TrackDuration)this.TrackDuration=await getTrackLength(audioContext,this.TrackURL);
@@ -1435,6 +1412,38 @@ class Track
     //     }
     // }
 }
+
+function PixelScan(bIsTesting,BlockTargetLocation,BlockTargetColor,BlockConfidence){
+    //TODO Use sexy ass image buffer
+    if(bIsTesting){
+        let ColorAtPixel = getPixelColor(BlockTargetLocation)
+        let totalDifference = 0;
+        const maxDifference = 255 * BlockTargetColor.length;
+        for (let i = 0; i < BlockTargetColor.length; i++) {
+            totalDifference += Math.abs(BlockTargetColor[i] - ColorAtPixel[i]);
+        }
+        const Confidence = 1 - totalDifference / maxDifference;
+        let DataArray={
+            ScanLocation:BlockTargetLocation,
+            TargetColor:BlockTargetColor,
+            FoundColor:ColorAtPixel,
+            ConfidenceNeeded:BlockConfidence,
+            CurrentConfidence:Confidence,
+            DidPrioritySucceed:Confidence >= BlockConfidence
+        }
+        return DataArray
+    }else{
+        if (BlockTargetLocation.X==undefined||BlockTargetLocation.Y==undefined){
+            console.error("Block.targetLocation failed! Values are not valid!")
+            throw new Error("Block.targetLocation failed! Values are not valid!")
+        }
+        let ColorAtPixel = getPixelColor(BlockTargetLocation)
+        conditionMet = isWithinConfidence(BlockTargetColor,ColorAtPixel,BlockConfidence) 
+        if(conditionMet)Log(new Error(),"IMAGE CONDITION MET");
+        return conditionMet
+    }
+}
+
 async function getTrackLength(audioContext,filePath)
 {
     let bufferInfo
@@ -1476,17 +1485,6 @@ async function getBuffer(audioContext,filePath)
         return await audioContext.decodeAudioData(buffer.buffer)
     }
 }
-
-// async function AsyncTween(audioNode, startVolume, endVolume, duration) {
-//     const stepTime = 10; // Interval time in ms
-//     const totalSteps = duration / stepTime;
-//     const volumeStep = (endVolume - startVolume) / totalSteps;
-//     for (let step = 0; step <= totalSteps; step++) {
-//         const currentVolume = startVolume + volumeStep * step;
-//         audioNode.gain.value = currentVolume; // Set volume
-//         await new Promise((resolve) => setTimeout(resolve, stepTime)); // Wait for the step interval
-//     }
-// }
 async function AsyncTween(audioNode,startVolume,endVolume,duration){
     const startTime = performance.now();
     const stepTime = 10; // Interval time in ms
@@ -1554,16 +1552,16 @@ function interpolate(start,end,alpha)
 function Lerp(Min,Max,Alpha){
     return Min + (Max - Min) * Alpha;
 }
-
 function hexToRGB(hex)
 {
     hex=hex.replace("#","")
     const R=parseInt(hex.slice(0,2),16)
     const G=parseInt(hex.slice(2,4),16)
     const B=parseInt(hex.slice(4,6),16)
+    Log(new Error(),"Hex: ",hex)
+    Log(new Error(),"RGB: ",[R,G,B])
     return [R,G,B]
 }
-
 function getAlpha(currentValue, min, max) {
     if (currentValue < min) currentValue = min;
     if (currentValue > max) currentValue = max;
